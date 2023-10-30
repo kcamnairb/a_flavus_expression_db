@@ -1,0 +1,212 @@
+---
+title: "A flavus SRA RNA-Seq database"
+output:
+  html_notebook:
+    df_print: paged
+    code_folding: hide
+  editor_options: 
+    chunk_output_type: inline
+---
+
+```{r}
+#.libPaths('/home/brian.mack/aflavus_field_isolates/R_packages/4.2')
+library(DESeq2)
+library(tidyverse)
+library(here)
+library(rentrez)
+here::i_am('./flavus_sra_rnaseq.Rproj')
+```
+```{r}
+sra_fetch2df <- function(xml_text) {
+  sra_xml2 = xml2::as_xml_document(xml_text)
+  run_df = tryCatch({
+    xmlconvert::xml_to_df(text=xml_text, records.tags = '//SAMPLE_ATTRIBUTES/SAMPLE_ATTRIBUTE') %>%
+    group_by(TAG) %>%
+    summarize(VALUE = first(VALUE)) %>%
+    ungroup() %>%
+    pivot_wider(names_from = TAG, values_from = VALUE)
+  }, error = function(e){tibble()})
+  bioproject = xml2::xml_find_first(sra_xml2, '//IDENTIFIERS/EXTERNAL_ID[@namespace="BioProject"]') %>% xml2::xml_text()
+  biosample = xml2::xml_find_first(sra_xml2, '//IDENTIFIERS/EXTERNAL_ID[@namespace="BioSample"]') %>% xml2::xml_text()
+  experiment = xml2::xml_find_first(sra_xml2, '//EXPERIMENT/IDENTIFIERS') %>% xml2::xml_text()
+  run = xml2::xml_find_first(sra_xml2, '//RUN_SET/RUN/IDENTIFIERS/PRIMARY_ID') %>% xml2::xml_text()
+  sample_name = xml2::xml_find_first(sra_xml2, '//Member') %>% xml2::xml_attr('sample_name')
+  sample_title = xml2::xml_find_first(sra_xml2, '//Member') %>% xml2::xml_attr('sample_title')
+  filename = xml2::xml_find_first(sra_xml2, '//SRAFile') %>% xml2::xml_attr('filename')
+  email = xml2::xml_find_first(sra_xml2, '//Contact') %>% xml2::xml_attr('email')
+  first_name = xml2::xml_find_first(sra_xml2, '//Contact/Name/First') %>% xml2::xml_text()
+  last_name = xml2::xml_find_first(sra_xml2, '//Contact/Name/Last') %>% xml2::xml_text()
+  alias = xml2::xml_find_first(sra_xml2, '//EXPERIMENT')  %>% xml2::xml_attr('alias')
+  title2 = xml2::xml_find_first(sra_xml2, '//TITLE') %>% xml2::xml_text()
+  design_description = xml2::xml_find_first(sra_xml2, '//DESIGN/DESIGN_DESCRIPTION') %>% xml2::xml_text()
+  layout = xml2::xml_find_first(sra_xml2, '//LIBRARY_LAYOUT') %>% xml2::xml_child() %>% 
+    as.character() %>% str_remove_all('[</>]')
+  pubmed = xml2::xml_find_first(sra_xml2, '//STUDY_LINKS/STUDY_LINK/XREF_LINK') %>% 
+    xml2::xml_text() %>% str_remove('pubmed')
+  selection = xml2::xml_find_first(sra_xml2, '//LIBRARY_SELECTION') %>% xml2::xml_text()
+  study_title = xml2::xml_find_first(sra_xml2, '//STUDY_TITLE') %>% xml2::xml_text()
+  instrument = xml2::xml_find_first(sra_xml2, '//INSTRUMENT_MODEL') %>% xml2::xml_text()
+  abstract = xml2::xml_find_first(sra_xml2, '//STUDY_ABSTRACT') %>% xml2::xml_text()
+  date  = xml2::xml_find_first(sra_xml2, '//SRAFiles/SRAFile') %>% xml2::xml_attr('date')
+  parsed_df = tibble(bioproject = bioproject,
+                biosample = biosample,
+                experiment = experiment,
+                run = run,
+                sample_name = sample_name,
+                sample_title = sample_title,
+                filename = filename,
+                email = email,
+                first_name = first_name,
+                last_name = last_name,
+                alias = alias,
+                title2 = title2,
+                design_description = design_description,
+                layout = layout,
+                pubmed = pubmed,
+                selection = selection,
+                study_title = study_title,
+                instrument = instrument,
+                abstract = abstract,
+                date  = date)
+  remove_duplicate_columns_and_bind = function(df1, df2){
+    df2 = df2[!(names(df2) %in% names(df1))]
+    df1 %>% bind_cols(df2)
+  }
+  run_df = if(dim(run_df)[1] > 0) remove_duplicate_columns_and_bind(run_df, parsed_df) else parsed_df
+  return(run_df)
+}
+```
+
+```{r}
+sra_fetch[42,] %>% pull('fetch') %>% sra_fetch2df
+```
+
+```{r}
+flavus_search = entrez_search(db='sra', 
+ term='(Aspergillus flavus[Organism] & transcriptomic[Source]) | ("A. flavus" & transcriptomic[Source]) | ("Aspergillus flavus" & transcriptomic[Source])', retmax=10000)
+sra_fetch = tibble(sra_id = flavus_search$ids) %>%
+  rowwise() %>%
+  mutate(fetch = tryCatch({
+    Sys.sleep(0.5) 
+    rentrez::entrez_fetch(db='sra', id=sra_id, rettype = 'xml')},
+    error = function(e){NA}))
+sra_fetch = sra_fetch %>% filter(is.na(fetch)) %>% 
+  mutate(fetch =  rentrez::entrez_fetch(db='sra', id=sra_id, rettype = 'xml')) %>%
+  bind_rows(sra_fetch %>% filter(!is.na(fetch)))
+sra_df = sra_fetch$fetch %>% map(sra_fetch2df) %>% 
+  bind_rows()
+sra_df = sra_df %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'missing'))) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'not collected'))) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'not applicable'))) %>%
+  select(where(~any(!is.na(.x)))) 
+sra_df$run %>% write_lines(here('output/sra_runs.txt'))
+previous_runs = tibble(run = list.files(here('output/salmon_quant/jcvi')))
+sra_df %>% anti_join(previous_runs, by='run') %>% 
+  pull(run) %>%
+  write_lines(here('output/sra_runs_additional.txt'))
+```
+```{r}
+#flavus_search_web_hist = entrez_search(db='sra', 
+# term='(Aspergillus flavus[Organism] & transcriptomic[Source]) | ("A. flavus" & transcriptomic[Source]) | ("Aspergillus #flavus" & transcriptomic[Source])', use_history = TRUE)
+#sra_fetch_web_hist = rentrez::entrez_fetch(db='sra', web_history=flavus_search_web_hist$web_history, rettype = 'xml', #retmax=10000)
+#sra_fetch_web_hist %>% write_lines(here('sra_fetch_web_hist.xml'))
+#sra_xml2_web_hist = xml2::as_xml_document(sra_fetch_web_hist)
+#str(sra_xml2_web_hist)
+#run_df = tryCatch({
+#    xmlconvert::xml_to_df(text=sra_xml2_web_hist, records.tags = '//SAMPLE_ATTRIBUTES/SAMPLE_ATTRIBUTE') %>%
+#    group_by(TAG) %>%
+#    summarize(VALUE = first(VALUE)) %>%
+#    ungroup() %>%
+#    pivot_wider(names_from = TAG, values_from = VALUE)
+#  }, error = function(e){tibble()})
+## Web history method only returns 138 xml records when it should be over 900
+```
+
+
+```{r}
+write_csv(sra_df, here('output/sra_metadata.csv'))
+#get_attributes = function(xml_res){
+#  attr_values  = XML::xpathSApply(xml_res,"//Attributes/Attribute", XML::xmlValue)
+#  attr_names = XML::xpathApply(xml_res, "//Attributes/Attribute", XML::xmlAttrs)
+#  df = data.frame(attribute = unlist(attr_names), 
+#             value = rep(attr_values, lengths(attr_names))) 
+#  if(nrow(df) > 0){
+#    df = df %>% 
+#      mutate(attribute = str_replace(attribute, ' ', '_')) %>%
+#      distinct() %>% 
+#      pivot_wider(names_from='attribute', values_from='value')
+#  } else {
+#   df = NA
+#  }
+#  return(df)
+#}
+#sra_w_biosample = sra_df %>%
+#  rowwise() %>%
+#  mutate(biosample_search = list(tryCatch(
+#    {Sys.sleep(1)
+#      entrez_search(db='biosample', term=biosample)},
+#    error = function(e) {NA}
+#  )))
+#sra_w_biosample = sra_w_biosample %>%
+#  mutate(biosample_res = list(tryCatch(
+#    {Sys.sleep(1)
+#      entrez_fetch(db='biosample', id=biosample_search$ids, rettype='xml', parsed = TRUE)},
+#    error = function(e) {NA}
+#    ))) 
+#sra_w_biosample = sra_w_biosample %>% filter(is.na(biosample_res)) %>%
+#  mutate(biosample_res = list(tryCatch(
+#    {Sys.sleep(1)
+#      entrez_fetch(db='biosample', id=biosample_search$ids, rettype='xml', parsed = TRUE)},
+#    error = function(e) {NA}
+#    )))  %>%
+#  bind_rows(sra_w_biosample %>% filter(!is.na(biosample_res)))
+#sra_w_biosample = sra_w_biosample %>%
+#  mutate(biosample_df = list(tryCatch(
+#    {get_attributes(biosample_res)},
+#    error = function(e) {NA}
+#    ))) 
+#sra_w_biosample_unnest = sra_w_biosample %>% 
+#  mutate(biosample_df = list(biosample_df[!names(biosample_df) %in% names(.)]))  %>% 
+#  unnest_wider(biosample_df)
+#sra_w_biosample = read_csv(here('output/sra_with_biosample.csv'))
+
+
+sra_df %>% summarize(n_bp = n_distinct(bioproject), n_runs = n_distinct(run))
+##The BioSample results didn't provide anything that wasn't already in the SRA results so going to skip that
+```
+
+```{r}
+downloaded_runs = tibble(file = list.files(here('data/tmp_data/fastq'))) %>% 
+  filter(str_detect(file, 'fastq')) %>%
+  mutate(run = str_remove(file, '_.*|\\..*')) 
+downloaded_runs %>%
+  count(run, sort=TRUE) %>% 
+  count(n, sort=TRUE)
+sra_w_biosample %>% rename(run=Run) %>% anti_join(downloaded_runs)
+trimmed_runs = tibble(file = list.files(here('data/tmp_data/fastq_trimmed'))) %>%
+  mutate(run = str_remove(file, '_.*|\\..*'))
+sra_w_biosample %>% rename(run=Run) %>% anti_join(trimmed_runs)
+runs_with_trim_error = tibble(file = list.files(here(), pattern='std', full.names = TRUE)) %>%
+  rowwise() %>%
+  mutate(text = list(read_file(file))) %>%
+  mutate(error = str_detect(text, "ERROR: sequence and quality have different length")) %>%
+  mutate(run = str_replace(text, regex('.*/fastq/(SRR.*?)[._].*', dotall=TRUE), '\\1')) 
+sra_w_biosample %>% rename(run=Run) %>% semi_join(runs_with_trim_error %>% filter(error))
+runs_with_trim_error %>% filter(error) %>% pull(run) %>% write_lines(here('output/runs_with_trim_errors.txt'))
+runs_with_trim_error %>% filter(error) %>%
+  mutate(fastq = str_replace(text, regex('.*/fastq/(SRR.*?fastq.gz).*', dotall=TRUE), '\\1')) 
+```
+```{r}
+sra_df = read_csv(here('output/sra_metadata.csv'))
+doi = sra_df %>%
+  filter(!is.na(pubmed)) %>%
+  distinct(bioproject, pubmed) %>%
+  rowwise() %>%
+  mutate(doi = rentrez::parse_pubmed_xml(entrez_fetch(pubmed, db="pubmed", parsed = TRUE, rettype = "xml"))$doi) %>% 
+  ungroup()
+sra_df = sra_df %>% left_join(doi)
+sra_df %>% write_csv(here('output/sra_metadata.csv'))
+```
+
+
