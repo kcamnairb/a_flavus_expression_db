@@ -8,7 +8,7 @@ library(InteractiveComplexHeatmap)
 library(kableExtra)
 library(tidyverse)
 
-#setwd('src/shiny')
+#setwd('shiny_app')
 tpm_jcvi = read_csv('data/A_flavus_jcvi_tpm.csv', show_col_types = FALSE)
 tpm_chrom_level = read_csv('data/A_flavus_chrom_level_tpm.csv', show_col_types = FALSE)
 vst_jcvi = read_csv('data/vst_jcvi.csv', show_col_types = FALSE)
@@ -35,13 +35,13 @@ metadata = read_csv('data/sra_metadata_filtered.csv', show_col_types = FALSE) %>
   mutate(doi = ifelse(is.na(doi), NA, str_glue('https://doi.org/{doi}'))) %>%
   mutate(doi = ifelse(is.na(doi), NA, str_glue("<a href='{doi}'>{doi}</a>"))) %>%
   select(-filename)
-functional_annotation_jcvi = read_csv('data/Af3357_functional_annotation.csv') %>%
+functional_annotation_jcvi = read_csv('data/functional_annotation_jcvi.csv') %>%
   dplyr::rename(gene_id = gene, `Gene Ontology` = `gene ontology`, `KEGG pathways` = `kegg pathways`, 
          `biosynthetic gene clusters` = smurf_and_known_metabolite, 
          `Subcellular localization (DeepLoc)` = deeploc_location, 
          `Interpro domains` = `interpro domains`) %>%
   mutate(`Gene Ontology` = str_remove_all(`Gene Ontology`, "'de novo'"))
-functional_annotation_chrom_level = read_csv('data/annotation_combined.csv') %>% 
+functional_annotation_chrom_level = read_csv('data/functional_annotation_chrom_level.csv') %>% 
   filter(compound != 'aflatoxin G1')
 annotation_col_to_df = function(column, annotation){
   df = annotation %>% 

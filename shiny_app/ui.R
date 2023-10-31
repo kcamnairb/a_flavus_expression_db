@@ -54,6 +54,7 @@ ui = navbarPage(
                            multiple=TRUE),
                actionButton("generate_heatmap", "Generate heatmap"),
                br(),
+               br(),
                downloadButton('download_multi_gene_data', label = 'Download expression data for these genes')
              ),
              mainPanel(
