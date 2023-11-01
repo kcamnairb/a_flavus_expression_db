@@ -15,7 +15,7 @@ vst_jcvi = read_csv('data/vst_jcvi.csv', show_col_types = FALSE)
 vst_chrom_level = read_csv('data/vst_chrom_level.csv', show_col_types = FALSE)
 
 metadata = read_csv('data/sra_metadata_filtered.csv', show_col_types = FALSE) %>%
-  select(-`collection date`, -collection_date, run_title = title2) %>%
+  select(-collection_date, run_title = title2) %>%
   dplyr::rename(growth_condition = `growth condition`) %>%
   mutate(across(c(strain, sample_type,  source_name, genotype), 
                 ~str_remove(.x, regex('^A.* flavus ', ignore_case = TRUE)))) %>%

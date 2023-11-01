@@ -4,7 +4,7 @@ This repository contains code to download all Aspergillus flavus RNA-Seq data fr
 
 ## Pipeline
 
-The pipeline code is in the `pipeline` directory. It performs the following steps:
+The code to download and process the RNA-Seq data is in the `src` directory. It performs the following steps:
 
 1. Identifies A. flavus RNA-Seq experiments available on NCBI and downloads metadata using rentrez. Metadata about the samples is stored in `output/sra_metadata.csv`.
 2. Downloads FASTQ files from the NCBI SRA using fastq-dl. 

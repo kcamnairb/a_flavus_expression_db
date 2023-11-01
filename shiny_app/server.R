@@ -8,6 +8,11 @@ server = function(input, output, session) {
            'GCA_000006275.2 (JCVI-afl1-v2.0) VST (variance stabilizing transformation)' = vst_jcvi,
            'GCA_009017415.1 (chromosome level) VST (variance stabilizing transformation)' = vst_chrom_level)
   })
+  dataset_pca = reactive({
+    switch(input$dataset_pca,
+           'GCA_000006275.2 (JCVI-afl1-v2.0)' = vst_jcvi,
+           'GCA_009017415.1 (chromosome level)' = vst_chrom_level)
+  })
   rv <- reactiveValues()
   single_gene_barplot = function(df, gene_of_interest){
     dataset_input() %>%
@@ -164,4 +169,53 @@ server = function(input, output, session) {
       }
     })
   }
+  create_pca = function(){
+    vsd = dataset_pca()
+    gene_variance = rowVars(vsd %>% column_to_rownames('gene_id') %>% as.matrix())
+    # select the ntop genes by variance
+    most_variable_genes = order(gene_variance, decreasing=TRUE)[1:4000]
+    # perform a PCA on the data in assay(x) for the selected genes
+    pca = prcomp(t((vsd %>% column_to_rownames('gene_id') %>% as.matrix())[most_variable_genes,]))
+    # the contribution to the total variance for each component
+    percent_var = pca$sdev^2 / sum(pca$sdev^2) 
+    percent_var = round(100 * percent_var, 2)
+    #ggplot(tibble(percent_variance_explained = percent_var, 
+    #              principal_component = seq(1, length(percent_var)))) +
+    #  geom_col(aes(x=principal_component, y=percent_variance_explained)) +
+    #  coord_cartesian(xlim = c(0, 10))
+    # assemble data for biplot
+    pca_scores = pca$x[,1:10] %>% as_tibble() %>% 
+      bind_cols(run = names(vsd)[2:length(vsd)]) %>%
+      left_join(metadata, by='run')
+    pca_scores %>%
+      mutate(across(c(strain, sample_type,  source_name, genotype), 
+                    ~str_remove(.x, regex('^A.* flavus ', ignore_case = TRUE)))) %>%
+      mutate(across(c(strain, sample_type,  source_name, genotype, treatment, isolate), 
+                    ~na_if(.x, 'missing'))) %>%
+      mutate(strain = str_replace(strain, 'NRRL3357|NR3357', 'NRRL 3357')) %>%
+      unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate,
+            sep = ';', na.rm =TRUE, remove = FALSE) %>% 
+      ggplot(aes(.data[[paste0('PC',input$pc_x)]], .data[[paste0('PC',as.numeric(input$pc_x) + 1)]], 
+                 color=.data[[input$category_to_color_pca]], label=sample_description)) +
+      geom_point(alpha=0.5) +
+      xlab(paste0("PC", input$pc_x, ": ",percent_var[as.numeric(input$pc_x)],"% variance")) +
+      ylab(paste0("PC", as.numeric(input$pc_x) + 1, ": ",percent_var[as.numeric(input$pc_x) + 1],"% variance")) +
+      theme_bw() +
+      scale_fill_manual(values = mpn65) +
+      ggeasy::easy_remove_legend()
+  }
+  ## Create metadata table when a sample in the PCA plot is clicked
+  output$sample_metadata_table_pca = renderDataTable({
+    click_data = event_data('plotly_click')
+    if (is.null(click_data)) 'Click on a sample dot to get further sample data' else {
+      metadata %>% filter(run == click_data$key) %>%
+        select(-sample_description) %>%
+        mutate(across(everything(), as.character)) %>%
+        pivot_longer(everything(), names_to='category', values_to='value') %>%
+        filter(!is.na(value))  
+    }
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+  output$pca = renderPlotly({
+    create_pca()
+  }) 
 }

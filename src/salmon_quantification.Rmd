@@ -29,19 +29,51 @@ counts_jcvi = list.files(here('output', 'salmon_quant', 'jcvi'), pattern='quant.
   purrr::reduce(full_join, by='gene_id')
 counts_jcvi = counts_jcvi %>% rename_with(~str_replace(., '.*/(.*?)/quant.sf', '\\1')) %>%
   mutate(across(-gene_id, round))
-samples_to_keep = counts_jcvi %>% 
-  pivot_longer(-gene_id, names_to='sample_id', values_to='counts') %>%
-  group_by(sample_id) %>%
-  summarize(total_counts = sum(counts)) %>% 
-  filter(total_counts > 1e6) %>%
-  pull(sample_id)
+
+counts_jcvi %>% write_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_jcvi_counts_unfiltered.csv'))
+counts_sums_jcvi = counts_jcvi %>% 
+  pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
+  group_by(run) %>%
+  summarize(total_counts = sum(counts)) 
+samples_to_keep = counts_sums_jcvi %>% 
+  filter(total_counts >= 1e6) %>%
+  pull(run)
 length(samples_to_keep)
 metadata = sra_df %>% 
   filter(str_detect(strain, 'fumigatus', negate = TRUE)) %>%
-  filter(run %in% samples_to_keep) 
+  filter(run %in% samples_to_keep)
+
+metadata = metadata %>%
+  mutate(across(c(strain, sample_type,  source_name, genotype), 
+                              ~str_remove(.x, regex('^A.* flavus ', ignore_case = TRUE)))) %>%
+  mutate(across(c(strain, sample_type,  source_name, genotype, treatment, isolate), 
+                ~na_if(.x, 'missing'))) %>%
+  mutate(strain = str_replace(strain, 'NRRL3357|NR3357', 'NRRL 3357')) %>%
+  unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate,
+        sep = ';', na.rm =TRUE, remove = FALSE) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'missing'))) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'not collected'))) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'not applicable'))) %>%
+  select(where(~any(!is.na(.x)))) 
+#sra_df
+#metadata %>% 
+#  distinct(strain) %>% print.data.frame()
+#metadata_long = metadata %>% 
+#  mutate(across(everything(), as.character)) %>%
+#  pivot_longer(-run, names_to='category', values_to='value')
+metadata %>% 
+  filter(str_detect(strain, '3357') & strain != 'NRRL 3357')
+  mutate(across(everything(), as.character)) %>%
+  rowwise() %>%
+  mutate(strain_extracted = str_extract_all(
+    c_across(-c(bioproject:run, email, layout, selection, instrument, id, source_material_id)),
+    '[:alpha:]{2,5}\\s*\\d{2,5}')) %>% 
+  filter(!is.na(strain_extracted)) %>% View()
+
 metadata %>% write_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
 metadata_df = metadata %>% column_to_rownames('run')
 counts_jcvi = counts_jcvi %>% select(gene_id, all_of(metadata$run))
+counts_jcvi %>% write_csv(here('output/salmon_quant/jcvi_counts.csv'))
 tpm_jcvi = list.files(here('output', 'salmon_quant', 'jcvi'), pattern='quant.sf', full.names = TRUE, recursive = TRUE) %>%
   map(~read_tsv(.x, show_col_types = FALSE) %>%
         select(gene_id = Name, !!.x := TPM)) %>%
@@ -55,10 +87,18 @@ tpm_jcvi %>% write_csv(here('shiny_app/data', 'A_flavus_jcvi_tpm.csv'))
 all(rownames(metadata_df) == colnames(counts_jcvi)[2:ncol(counts_jcvi)])
 dds_jcvi = DESeq2::DESeqDataSetFromMatrix(counts_jcvi %>% column_to_rownames('gene_id'), colData = metadata_df, design = ~ 1)
 dds_jcvi = DESeq2::DESeq(dds_jcvi)
-vsd_jcvi = DESeq2::vst(dds_jcvi, blind=TRUE)
-assay(vsd_jcvi) %>% as_tibble(rownames = 'gene_id') %>% 
+vst_jcvi = DESeq2::vst(dds_jcvi, blind=TRUE)
+assay(vst_jcvi) %>% as_tibble(rownames = 'gene_id') %>% 
   write_csv(here('shiny_app/data', 'vst_jcvi.csv'))
+vsd_jcvi = read_csv(here('shiny_app/data', 'vst_jcvi.csv'))
 ```
+```{r}
+sra_df %>% 
+  #filter(str_detect(strain, 'fumigatus', negate = TRUE)) %>%
+  #anti_join(tibble(run = samples_to_keep))
+  anti_join(tibble(run = names(counts_jcvi)[2:length(names(counts_jcvi))])) %>% View()
+```
+
 ```{r}
 tpm_jcvi = read_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_jcvi_tpm_unfiltered.csv'))
 vst_jcvi = read_csv(here('output/salmon_quant/jcvi/vst_jcvi.csv'))
@@ -87,7 +127,7 @@ tpm_chrom_level = list.files(here('output', 'salmon_quant', 'chrom_level'),
         select(gene_id = Name, !!.x := TPM)) %>%
   purrr::reduce(full_join, by='gene_id')  %>% 
   rename_with(~str_replace(., '.*/(.*?)/quant.sf', '\\1'))
-tpm_chrom_level %>% write_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_chrom_level_tpm_unfiltered.csv'))
+tpm_chrom_level %>% write_csv(here('output', 'salmon_quant', 'chrom_level', 'A_flavus_chrom_level_tpm_unfiltered.csv'))
 tpm_chrom_level = tpm_chrom_level %>%
   select(gene_id, all_of(metadata$run))
 tpm_chrom_level %>% write_csv(here('shiny_app/data', 'A_flavus_chrom_level_tpm.csv'))
@@ -96,8 +136,8 @@ all(rownames(metadata_df) == colnames(counts_chrom_level)[2:ncol(counts_chrom_le
 dds_chrom_level = DESeq2::DESeqDataSetFromMatrix(counts_chrom_level %>% column_to_rownames('gene_id'), 
                                                  colData = metadata_df, design = ~ 1)
 dds_chrom_level = DESeq2::DESeq(dds_chrom_level)
-vsd_chrom_level = DESeq2::vst(dds_chrom_level, blind=TRUE)
-assay(vsd_chrom_level) %>% as_tibble(rownames = 'gene_id') %>% 
+vst_chrom_level = DESeq2::vst(dds_chrom_level, blind=TRUE)
+assay(vst_chrom_level) %>% as_tibble(rownames = 'gene_id') %>% 
   write_csv(here('shiny_app/data/vst_chrom_level.csv'))
 ```
 
@@ -128,7 +168,7 @@ mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00',
 
 
 ```{r, fig.height=6, fig.width=10}
-pca_data_jcvi <- DESeq2::plotPCA(vsd_jcvi, intgroup='bioproject', returnData=T, ntop=4000)
+pca_data_jcvi <- DESeq2::plotPCA(vst_jcvi, intgroup='bioproject', returnData=T, ntop=4000)
 percentVar_jcvi <- round(100 * attr(pca_data_jcvi, "percentVar"))
 ggplotly(
   pca_data_jcvi %>% as.data.frame() %>% rownames_to_column('run') %>%
@@ -153,7 +193,7 @@ ggplotly(
 ```
 
 ```{r, fig.height=6, fig.width=10}
-pca_data_chrom_level <- DESeq2::plotPCA(vsd_chrom_level, intgroup='bioproject', returnData=T, ntop=4000)
+pca_data_chrom_level <- DESeq2::plotPCA(vst_chrom_level, intgroup='bioproject', returnData=T, ntop=4000)
 percentVar_chrom_level <- round(100 * attr(pca_data_chrom_level, "percentVar"))
 ggplotly(
   pca_data_chrom_level %>% as.data.frame() %>% rownames_to_column('run') %>%
@@ -177,40 +217,13 @@ ggplotly(
 )
 ```
 ```{r}
-assay(vsd_jcvi) %>% as_tibble(rownames = 'gene_id') %>% 
+assay(vst_jcvi) %>% as_tibble(rownames = 'gene_id') %>% 
   right_join(annotation_jcvi %>% filter(!is.na(smurf_and_known_metabolite)) %>%
                select(gene_id=gene, smurf_and_known_metabolite)) %>%
   relocate(gene_id, smurf_and_known_metabolite) %>% View()
 ```
 
-```{r}
-mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00','#7f80cd','#b3e900','#c42e60','#a65628',
-          '#f781bf','#8dd3c7','#bebada','#fb8072','#80b1d3','#fdb462','#fccde5','#bc80bd','#ffed6f','#c4eaff','#cf8c00',
-          '#1b9e77','#d95f02','#e7298a','#e6ab02','#a6761d','#0097ff','#00d067','#000000','#252525','#525252','#737373',
-          '#969696','#bdbdbd','#f43600','#4ba93b','#5779bb','#927acc','#97ee3f','#bf3947','#9f5b00','#f48758','#8caed6',
-          '#f2b94f','#eff26e','#e43872','#d9b100','#9d7a00','#698cff','#d9d9d9','#00d27e','#d06800','#009f82','#c49200',
-          '#cbe8ff','#fecddf','#c27eb6','#8cd2ce','#c4b8d9','#f883b0','#a49100','#f48800','#27d0df','#a04a9b')
-tpm_chrom_level %>% 
-  filter(gene_id == 'F9C07_2278511') %>%
-  pivot_longer(-gene_id, names_to='sra_run', values_to='tpm') %>%
-  left_join(metadata_df %>% as_tibble(rownames='sra_run')) %>%
-  ggplot(aes(sra_run, tpm, fill=bioproject)) +
-  geom_col() +
-  scale_fill_manual(values = mpn65) +
-  ggeasy::easy_remove_legend()
-single_gene_barplot = function(df, gene_of_interest){
-  df %>%
-    filter(gene_id == gene_of_interest) %>%
-    pivot_longer(-gene_id, names_to='sra_run', values_to='tpm') %>%
-    left_join(metadata_df %>% as_tibble(rownames='sra_run')) %>%
-    ggplot(aes(sra_run, tpm, fill=bioproject)) +
-    geom_col() +
-    scale_fill_manual(values = mpn65) +
-    ggeasy::easy_remove_legend()
-}
-single_gene_barplot(tpm_jcvi, 'AFLA_023020')
 
-```
 ```{r}
 bioprojects_involving_plants = metadata %>% 
   select(-biosample_search, -biosample_res, -host, -isolation_source) %>%

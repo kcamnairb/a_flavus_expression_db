@@ -95,11 +95,6 @@ sra_fetch = sra_fetch %>% filter(is.na(fetch)) %>%
   bind_rows(sra_fetch %>% filter(!is.na(fetch)))
 sra_df = sra_fetch$fetch %>% map(sra_fetch2df) %>% 
   bind_rows()
-sra_df = sra_df %>%
-  mutate(across(where(is.character), ~ na_if(.x, 'missing'))) %>%
-  mutate(across(where(is.character), ~ na_if(.x, 'not collected'))) %>%
-  mutate(across(where(is.character), ~ na_if(.x, 'not applicable'))) %>%
-  select(where(~any(!is.na(.x)))) 
 sra_df$run %>% write_lines(here('output/sra_runs.txt'))
 previous_runs = tibble(run = list.files(here('output/salmon_quant/jcvi')))
 sra_df %>% anti_join(previous_runs, by='run') %>% 
@@ -208,5 +203,6 @@ doi = sra_df %>%
 sra_df = sra_df %>% left_join(doi)
 sra_df %>% write_csv(here('output/sra_metadata.csv'))
 ```
+
 
 

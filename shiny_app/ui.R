@@ -3,24 +3,26 @@ ui = navbarPage(
              #group input {height:10px;}"
   ),
   title = 'Aspergillus flavus expression database',
-  #tabPanel('Single gene barplot',
-  #         sidebarLayout(
-  #           sidebarPanel(
-  #             selectInput(inputId = 'dataset',
-  #                         label = 'Choose an assembly/annotation:',
-  #                         choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
-  #             textInput(inputId = 'gene_id',
-  #                       label = 'Gene ID',
-  #                       value = 'AFLA_139360'),
-  #             downloadButton('download_single_gene_data', label = 'Download expression data for this gene')
-  #           ),
-  #           mainPanel(
-  #             plotlyOutput('barplot'),
-  #             dataTableOutput('sample_metadata_table')
-  #           )
-  #         )
-  #),
+  tabPanel('Single gene barplot',
+           #id='barplot',
+           sidebarLayout(
+             sidebarPanel(
+               selectInput(inputId = 'dataset',
+                           label = 'Choose an assembly/annotation:',
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               textInput(inputId = 'gene_id',
+                         label = 'Gene ID',
+                         value = 'AFLA_139360'),
+               downloadButton('download_single_gene_data', label = 'Download expression data for this gene')
+             ),
+             mainPanel(
+               plotlyOutput('barplot'),
+               dataTableOutput('sample_metadata_table')
+             )
+           )
+  ),
   tabPanel('Multiple gene heatmap',
+           #id='heatmap', 
            sidebarLayout(
              sidebarPanel(
                selectInput(inputId = 'dataset',
@@ -63,6 +65,26 @@ ui = navbarPage(
                  InteractiveComplexHeatmapOutput(title1 = "Full heatmap", layout = "1|(2-3)", width1=1000, height1=450, 
                                                action = 'click', output_ui = htmlOutput("gene_info"))
              ))
+           )
+  ),
+  tabPanel('PCA',
+           sidebarLayout(
+             sidebarPanel(
+               selectInput(inputId = 'dataset_pca',
+                           label = 'Choose an assembly/annotation:',
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               selectInput(inputId = 'pc_x',
+                           label = 'principal component to display',
+                           choices = seq(1,10),
+                           selected = 1),
+               selectizeInput(inputId = 'category_to_color_pca', 
+                              label = 'Category to color samples by', 
+                              choices = c('bioproject', 'strain'))
+             ),
+             mainPanel(
+               plotlyOutput('pca'),
+               dataTableOutput('sample_metadata_table_pca')
+               )
            )
   ),
   theme = bs_theme(bootswatch = 'cerulean')
