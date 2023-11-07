@@ -12,7 +12,7 @@ counts_sums_jcvi = counts_jcvi %>%
   pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
   group_by(run) %>%
   summarize(total_counts = sum(counts))
-counts_sums_jcvi
+counts_sums_jcvi %>% dplyr::count(total_counts > 10e6)
 qc = fastp_reports %>%
   left_join(counts_sums_jcvi, by='run') %>% 
   left_join(sra_df, by='run')
