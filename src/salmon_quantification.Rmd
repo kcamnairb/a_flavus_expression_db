@@ -14,6 +14,7 @@ library(tidyverse)
 library(here)
 library(rentrez)
 library(DESeq2)
+library(edgeR)
 ```
 ```{r}
 fastp_jcvi = read_tsv(here('output/fastp_reports/multiqc_data/multiqc_general_stats.txt'))
@@ -74,6 +75,7 @@ metadata %>% write_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
 metadata_df = metadata %>% column_to_rownames('run')
 counts_jcvi = counts_jcvi %>% select(gene_id, all_of(metadata$run))
 counts_jcvi %>% write_csv(here('output/salmon_quant/jcvi_counts.csv'))
+counts_jcvi = read_csv(here('output/salmon_quant/jcvi_counts.csv'))
 tpm_jcvi = list.files(here('output', 'salmon_quant', 'jcvi'), pattern='quant.sf', full.names = TRUE, recursive = TRUE) %>%
   map(~read_tsv(.x, show_col_types = FALSE) %>%
         select(gene_id = Name, !!.x := TPM)) %>%

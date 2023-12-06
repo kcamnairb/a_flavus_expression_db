@@ -62,7 +62,7 @@ annotation_col_to_df = function(column, annotation){
 }
 annotation_categories = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
                           'Subcellular localization (DeepLoc)', 'Interpro domains')
-annotation_list = annotation_categories %>% set_names() %>% 
+annotation_list = annotation_categories %>% purrr::set_names() %>% 
   map(~annotation_col_to_df(.x, annotation = functional_annotation_jcvi))
 annotation_categories = c(annotation_categories, 'Gene list (Comma separated)')
 annotation_list[['Gene list (Comma separated)']] = functional_annotation_jcvi %>%
