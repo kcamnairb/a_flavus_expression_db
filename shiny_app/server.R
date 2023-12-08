@@ -1,6 +1,7 @@
 #save.image('data/data.RData')
 #load('data/data.RData')
 server = function(input, output, session) {
+  ### Barplot ###
   dataset_input = reactive({
     switch(paste(input$dataset, input$normalization_method),
            'GCA_000006275.2 (JCVI-afl1-v2.0) TPM (transcripts per million)' = tpm_jcvi,
@@ -65,7 +66,7 @@ server = function(input, output, session) {
         arrange(bioproject, sra_run)
       write.csv(df, file, row.names = FALSE)
     })
-  ### Multi-gene heatmap 
+  ### Multi-gene heatmap ###
   output$download_multi_gene_data = downloadHandler(
     filename = function(){
       paste0('A_flavus_', rv$normalization_method_short, '.csv')
@@ -169,20 +170,96 @@ server = function(input, output, session) {
       }
     })
   }
+  ## Create metadata table when a sample in the PCA plot is clicked
+  output$sample_metadata_table_pca = renderDataTable({
+    click_data = event_data('plotly_click')
+    if (is.null(click_data)) 'Click on a sample dot to get further sample data' else {
+      metadata %>% filter(run == click_data$key) %>%
+        select(-sample_description) %>%
+        mutate(across(everything(), as.character)) %>%
+        pivot_longer(everything(), names_to='category', values_to='value') %>%
+        filter(!is.na(value))  
+    }
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+  output$pca = renderPlotly({
+    create_pca()
+  }) 
+  ### Co-expression network ###
+  create_network = function(gene_ids, network){
+    #gene_ids = str_split_1(gene_ids, ',|\\s')
+    print('rendering network')
+    gene_ids = gene_ids[gene_ids %in% V(network)$name]
+    if (input$show_neighbors){
+      node_neighbors = ego(network, order = 1, nodes = gene_ids)
+      g = induced_subgraph(network, unlist(node_neighbors))
+      V(g)$selected = V(g)$name  %in% gene_ids
+      V(g)$group = ifelse(V(g)$name %in% gene_ids, 'query_genes', 'neighbors')
+      data <- toVisNetworkData(g)
+      visNetwork(nodes = data$nodes, edges = data$edges, height = "500px") %>%
+        visIgraphLayout(randomSeed=1234, type = "full") %>%
+        visEdges(width=1, color='lightgray', smooth = FALSE) %>%
+        visNodes(opacity=0.1) %>%
+        visGroups(groupname = "neighbors", color = "lightgrey") %>%
+        visGroups(groupname = "query_genes", color = "lightblue", size=30) %>%
+        visLegend(position = 'right')
+    } else {
+      print('not showing neighbors')
+      g = induced_subgraph(network, gene_ids)
+      data = toVisNetworkData(g)
+      if (input$annotation_category_network != 'Gene list (Comma separated)'){
+        print('coloring groups')
+        print(input$annotation_category_network)
+        data$nodes$group = data$nodes[[input$annotation_category_network]]
+        print('added group column')
+        visnet = visNetwork(nodes = data$nodes, edges = data$edges, height = "500px")
+        print('created visnet')
+        annotations = data$nodes[[input$annotation_category_network]] %>% unique()
+        print('made annotations')
+        print(annotations)
+        for (idx in seq(1:length(annotations))){
+          visnet = visGroups(visnet, groupname = annotations[idx], color = mpn65[idx])
+        }
+        print('assigned colors')
+        visnet %>%
+          visIgraphLayout(randomSeed=1234, type = "full") %>%
+          visEdges(width=1, color='lightgray', smooth = FALSE) %>%
+          visNodes(opacity=0.1) %>%
+          visLegend(position = 'right')
+      } else {
+      visNetwork(nodes = data$nodes, edges = data$edges, height = "500px") %>%
+        visIgraphLayout(randomSeed=1234, type = "full") %>%
+        visEdges(width=1, color='lightgray', smooth = FALSE) %>%
+        visNodes(opacity=0.1) %>%
+        visGroups(groupname = "neighbors", color = "lightgrey") %>%
+        visGroups(groupname = "query_genes", color = "lightblue", size=30) %>%
+        visLegend(position = 'right')
+      }
+    }
+  }
+  observeEvent(input$generate_network,{
+      output$network_vis = renderVisNetwork({
+        create_network(annotation_list[[input$annotation_category_network]] %>% 
+                         filter(display_text %in% input$gene_categories_network) %>% 
+                         pull(gene_id) %>% unlist() %>%
+                         str_split(',') %>% unlist(), 
+                       network)
+        })
+      })
+  observe({
+    updateSelectInput(session, "gene_categories_network",
+                      choices = annotation_list[[input$annotation_category_network]] %>% 
+                        pull(display_text))
+  })
+  ### PCA ###
   create_pca = function(){
     vsd = dataset_pca()
-    gene_variance = rowVars(vsd %>% column_to_rownames('gene_id') %>% as.matrix())
-    # select the ntop genes by variance
+    gene_variance = matrixStats::rowVars(vsd %>% column_to_rownames('gene_id') %>% as.matrix())
+    # select the top 4,000 genes by variance
     most_variable_genes = order(gene_variance, decreasing=TRUE)[1:4000]
-    # perform a PCA on the data in assay(x) for the selected genes
-    pca = prcomp(t((vsd %>% column_to_rownames('gene_id') %>% as.matrix())[most_variable_genes,]))
+    pca = prcomp(t((vsd %>% column_to_rownames('gene_id') %>% as.matrix())))
     # the contribution to the total variance for each component
     percent_var = pca$sdev^2 / sum(pca$sdev^2) 
     percent_var = round(100 * percent_var, 2)
-    #ggplot(tibble(percent_variance_explained = percent_var, 
-    #              principal_component = seq(1, length(percent_var)))) +
-    #  geom_col(aes(x=principal_component, y=percent_variance_explained)) +
-    #  coord_cartesian(xlim = c(0, 10))
     # assemble data for biplot
     pca_scores = pca$x[,1:10] %>% as_tibble() %>% 
       bind_cols(run = names(vsd)[2:length(vsd)]) %>%
@@ -204,18 +281,4 @@ server = function(input, output, session) {
       scale_fill_manual(values = mpn65) +
       ggeasy::easy_remove_legend()
   }
-  ## Create metadata table when a sample in the PCA plot is clicked
-  output$sample_metadata_table_pca = renderDataTable({
-    click_data = event_data('plotly_click')
-    if (is.null(click_data)) 'Click on a sample dot to get further sample data' else {
-      metadata %>% filter(run == click_data$key) %>%
-        select(-sample_description) %>%
-        mutate(across(everything(), as.character)) %>%
-        pivot_longer(everything(), names_to='category', values_to='value') %>%
-        filter(!is.na(value))  
-    }
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
-  output$pca = renderPlotly({
-    create_pca()
-  }) 
 }

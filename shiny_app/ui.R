@@ -3,8 +3,7 @@ ui = navbarPage(
              #group input {height:10px;}"
   ),
   title = 'Aspergillus flavus expression database',
-  tabPanel('Single gene barplot',
-           #id='barplot',
+  tabPanel('Single gene barplot ',
            sidebarLayout(
              sidebarPanel(
                selectInput(inputId = 'dataset',
@@ -21,8 +20,7 @@ ui = navbarPage(
              )
            )
   ),
-  tabPanel('Multiple gene heatmap',
-           #id='heatmap', 
+  tabPanel('Multiple gene heatmap ',
            sidebarLayout(
              sidebarPanel(
                selectInput(inputId = 'dataset',
@@ -67,7 +65,46 @@ ui = navbarPage(
              ))
            )
   ),
-  tabPanel('PCA',
+  
+  tabPanel('Co-expression network ',
+           sidebarLayout(
+             sidebarPanel(
+               #textInput(
+               #  inputId = 'gene_ids_network',
+               #  label = 'Gene IDs (Comma or whitespace separated)'
+               #),
+               
+               selectInput(inputId = 'dataset_network',
+                           label = 'Choose an assembly/annotation:',
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               selectInput(inputId = 'annotation_category_network', 
+                           label = 'Choose type of annotation', 
+                           choices = annotation_categories, 
+                           selected = 'Gene Ontology'),
+               selectizeInput(inputId = 'gene_categories_network', 
+                              label = 'Choose types of genes to include', 
+                              choices = '', 
+                              multiple=TRUE, 
+                              options = list(
+                                delimiter = ',',
+                                create = I("function(input, callback){
+                                return {
+                                  value: input,
+                                  text: input
+                                 };
+                              }"))),
+               checkboxInput(inputId = 'show_neighbors', 
+                             label = 'Show neighbors', 
+                             value = FALSE),
+               actionButton("generate_network", "Generate network"),
+             ),
+             mainPanel(
+               visNetworkOutput("network_vis", height = '800px'),
+               dataTableOutput('gene_data_table')
+             )
+           )
+  ),
+  tabPanel('PCA ',
            sidebarLayout(
              sidebarPanel(
                selectInput(inputId = 'dataset_pca',
@@ -75,7 +112,7 @@ ui = navbarPage(
                            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
                selectInput(inputId = 'pc_x',
                            label = 'principal component to display',
-                           choices = seq(1,10),
+                           choices = seq(1, 10),
                            selected = 1),
                selectizeInput(inputId = 'category_to_color_pca', 
                               label = 'Category to color samples by', 
@@ -84,7 +121,7 @@ ui = navbarPage(
              mainPanel(
                plotlyOutput('pca'),
                dataTableOutput('sample_metadata_table_pca')
-               )
+             )
            )
   ),
   theme = bs_theme(bootswatch = 'cerulean')
