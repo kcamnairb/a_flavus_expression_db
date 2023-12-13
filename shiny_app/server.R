@@ -45,15 +45,12 @@ server = function(input, output, session) {
   ## Create metadata table when bar in plot is clicked
   output$sample_metadata_table = renderDT({
     click_data = event_data('plotly_click')
-    if (is.null(click_data)) {
-      data.frame(message = 'Click on a bar to get further sample data')
-      } else {
+    validate(need(!is.null(click_data), 'Click on a bar to get further sample data'))
       metadata %>% filter(run == click_data$key) %>%
         select(-sample_description) %>%
         mutate(across(everything(), as.character)) %>%
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value))  
-    }
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
   ## Add a download button to download a csv of the expression data
   output$download_single_gene_data = downloadHandler(
@@ -172,22 +169,7 @@ server = function(input, output, session) {
       }
     })
   }
-  ## Create metadata table when a sample in the PCA plot is clicked
-  output$sample_metadata_table_pca = renderDataTable({
-    click_data = event_data('plotly_click')
-    if (is.null(click_data)){
-      'Click on a sample dot to get further sample data'
-      } else {
-      metadata %>% filter(run == click_data$key) %>%
-        select(-sample_description) %>%
-        mutate(across(everything(), as.character)) %>%
-        pivot_longer(everything(), names_to='category', values_to='value') %>%
-        filter(!is.na(value))  
-    }
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
-  output$pca = renderPlotly({
-    create_pca()
-  }) 
+ 
   ### Co-expression network ###
   create_network = function(gene_ids, network){
     #gene_ids = str_split_1(gene_ids, ',|\\s')
@@ -255,25 +237,23 @@ server = function(input, output, session) {
                       choices = annotation_list[[input$annotation_category_network]] %>% 
                         pull(display_text))
   })
-
-  #output$node_data_from_network  = function(){
-  #  ## https://stackoverflow.com/questions/49913752/undo-click-event-in-visnetwork-in-r-shiny
-  #  if (!is.null(input$node_selected) && (input$node_selected == 1)){
-  #    gene_data = functional_annotation_jcvi %>%
-  #      filter(gene_id == input$click) %>%
-  #      select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
-  #      pivot_longer(everything(), names_to='category', values_to='value') %>%
-  #      filter(!is.na(value)) 
-  #    kable(gene_data, 'html', col.names = NULL) %>%
-  #      kable_styling(bootstrap_options = c("striped")) %>%
-  #      pack_rows('gene data',  1, nrow(gene_data)) %>%
-  #      HTML()
-  #  } else {
-  #    invisible()
-  #  }
-  #}
+  output$node_data_from_network  = function(){
+    ## https://stackoverflow.com/questions/49913752/undo-click-event-in-visnetwork-in-r-shiny
+    if (!is.null(input$node_selected) && (input$node_selected == 1)){
+      gene_data = functional_annotation_jcvi %>%
+        filter(gene_id == input$click) %>%
+        select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
+        pivot_longer(everything(), names_to='category', values_to='value') %>%
+        filter(!is.na(value)) 
+      kable(gene_data, 'html', col.names = NULL) %>%
+        kable_styling(bootstrap_options = c("striped")) %>%
+        pack_rows('gene data',  1, nrow(gene_data)) %>%
+        HTML()
+    } else {
+      invisible()
+    }
+  }
   
-
   ### PCA ###
   create_pca = function(){
     vsd = dataset_pca()
@@ -297,7 +277,7 @@ server = function(input, output, session) {
       unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate,
             sep = ';', na.rm =TRUE, remove = FALSE) %>% 
       ggplot(aes(.data[[paste0('PC',input$pc_x)]], .data[[paste0('PC',as.numeric(input$pc_x) + 1)]], 
-                 color=.data[[input$category_to_color_pca]], label=sample_description)) +
+                 color=.data[[input$category_to_color_pca]], label=sample_description, key=run)) +
       geom_point(alpha=0.5) +
       xlab(paste0("PC", input$pc_x, ": ",percent_var[as.numeric(input$pc_x)],"% variance")) +
       ylab(paste0("PC", as.numeric(input$pc_x) + 1, ": ",percent_var[as.numeric(input$pc_x) + 1],"% variance")) +
@@ -305,4 +285,18 @@ server = function(input, output, session) {
       scale_fill_manual(values = mpn65) +
       ggeasy::easy_remove_legend()
   }
+  
+  output$pca = renderPlotly({
+    create_pca()
+  })
+  ## Create metadata table when a sample in the PCA plot is clicked
+  output$sample_metadata_table_pca = renderDataTable({
+    click_data_pca = event_data('plotly_click')
+    validate(need(!is.null(click_data_pca), 'Click on a sample dot to get further sample data'))
+    metadata %>% filter(run == click_data_pca$key) %>%
+      select(-sample_description) %>%
+      mutate(across(everything(), as.character)) %>%
+      pivot_longer(everything(), names_to='category', values_to='value') %>%
+      filter(!is.na(value))  
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
 }

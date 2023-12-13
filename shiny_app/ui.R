@@ -1,4 +1,4 @@
-ui = navbarPage( 
+ui = navbarPage(
   tags$style("#fieldsPanel {font-size:10px;height:10px;}
              #group input {height:10px;}"
   ),
