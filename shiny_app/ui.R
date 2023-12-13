@@ -34,7 +34,7 @@ ui = navbarPage(
                            choices = annotation_categories, 
                            selected = 'Gene Ontology'),
                selectizeInput(inputId = 'gene_categories', 
-                           label = 'Choose types of genes to include', 
+                           label = 'Choose genes to include', 
                            choices = '', 
                            multiple=TRUE, 
                            options = list(
@@ -82,7 +82,7 @@ ui = navbarPage(
                            choices = annotation_categories, 
                            selected = 'Gene Ontology'),
                selectizeInput(inputId = 'gene_categories_network', 
-                              label = 'Choose types of genes to include', 
+                              label = 'Choose genes to include', 
                               choices = '', 
                               multiple=TRUE, 
                               options = list(
@@ -99,8 +99,9 @@ ui = navbarPage(
                actionButton("generate_network", "Generate network"),
              ),
              mainPanel(
-               visNetworkOutput("network_vis", height = '800px'),
-               dataTableOutput('gene_data_table')
+               visNetworkOutput("network_vis", height = '600px'),
+               tableOutput("nodes_data_from_shiny"),
+               uiOutput('dt_UI')
              )
            )
   ),
