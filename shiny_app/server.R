@@ -43,9 +43,11 @@ server = function(input, output, session) {
     rv$normalization_method_short = str_remove(input$normalization_method, ' .*')
   })
   ## Create metadata table when bar in plot is clicked
-  output$sample_metadata_table = renderDataTable({
+  output$sample_metadata_table = renderDT({
     click_data = event_data('plotly_click')
-    if (is.null(click_data)) 'Click on a bar to get further sample data' else {
+    if (is.null(click_data)) {
+      data.frame(message = 'Click on a bar to get further sample data')
+      } else {
       metadata %>% filter(run == click_data$key) %>%
         select(-sample_description) %>%
         mutate(across(everything(), as.character)) %>%
@@ -173,7 +175,9 @@ server = function(input, output, session) {
   ## Create metadata table when a sample in the PCA plot is clicked
   output$sample_metadata_table_pca = renderDataTable({
     click_data = event_data('plotly_click')
-    if (is.null(click_data)) 'Click on a sample dot to get further sample data' else {
+    if (is.null(click_data)){
+      'Click on a sample dot to get further sample data'
+      } else {
       metadata %>% filter(run == click_data$key) %>%
         select(-sample_description) %>%
         mutate(across(everything(), as.character)) %>%
@@ -239,9 +243,11 @@ server = function(input, output, session) {
                          pull(gene_id) %>% unlist() %>%
                          str_split(',') %>% unlist(), 
                        network) %>%
-          visEvents(select = "function(nodes) {
-                Shiny.onInputChange('current_node_id', nodes.nodes);
-                ;}")
+          visEvents(click = "function(nodes){
+                Shiny.onInputChange('click', nodes.nodes[0]);
+                Shiny.onInputChange('node_selected', nodes.nodes.length);
+                ;}"
+          )
         })
       })
   observe({
@@ -249,29 +255,24 @@ server = function(input, output, session) {
                       choices = annotation_list[[input$annotation_category_network]] %>% 
                         pull(display_text))
   })
-  myNode = reactiveValues(selected = '')
-  observeEvent(input$current_node_id, {
-    myNode$selected <<- input$current_node_id
-  })
-  output$nodes_data_from_shiny  = function(){
-    gene_data = functional_annotation_jcvi %>%
-      filter(gene_id == myNode$selected) %>%
-      select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
-      pivot_longer(everything(), names_to='category', values_to='value') %>%
-      filter(!is.na(value)) 
-    kable(gene_data, 'html', col.names = NULL) %>%
-      kable_styling(bootstrap_options = c("striped")) %>%
-      pack_rows('gene data',  1, nrow(gene_data)) %>%
-      HTML()
-  }
+
+  #output$node_data_from_network  = function(){
+  #  ## https://stackoverflow.com/questions/49913752/undo-click-event-in-visnetwork-in-r-shiny
+  #  if (!is.null(input$node_selected) && (input$node_selected == 1)){
+  #    gene_data = functional_annotation_jcvi %>%
+  #      filter(gene_id == input$click) %>%
+  #      select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
+  #      pivot_longer(everything(), names_to='category', values_to='value') %>%
+  #      filter(!is.na(value)) 
+  #    kable(gene_data, 'html', col.names = NULL) %>%
+  #      kable_styling(bootstrap_options = c("striped")) %>%
+  #      pack_rows('gene data',  1, nrow(gene_data)) %>%
+  #      HTML()
+  #  } else {
+  #    invisible()
+  #  }
+  #}
   
-  output$dt_UI = renderUI({
-    if (length(myNode$selected) > 0) {
-    #if (TRUE) {
-      tableOutput('nodes_data_from_shiny')
-    } else{
-    }
-  })
 
   ### PCA ###
   create_pca = function(){

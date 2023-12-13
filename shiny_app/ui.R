@@ -16,7 +16,7 @@ ui = navbarPage(
              ),
              mainPanel(
                plotlyOutput('barplot'),
-               dataTableOutput('sample_metadata_table')
+               DTOutput('sample_metadata_table')
              )
            )
   ),
@@ -100,8 +100,7 @@ ui = navbarPage(
              ),
              mainPanel(
                visNetworkOutput("network_vis", height = '600px'),
-               tableOutput("nodes_data_from_shiny"),
-               uiOutput('dt_UI')
+               htmlOutput("node_data_from_network"),
              )
            )
   ),

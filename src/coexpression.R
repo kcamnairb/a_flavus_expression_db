@@ -187,6 +187,8 @@ node_tables = edges_filtered %>%
         left_join(functional_annotation_jcvi, by='gene_id'))
 networks = map2(edges_filtered, node_tables, 
                 ~graph_from_data_frame(.x, vertices = .y, directed = FALSE))
+saveRDS(networks, here('output/coexpression/networks.rds'))
+
 # https://github.com/cxli233/SimpleTidy_GeneCoEx#gene-wise-correlation
 create_communities_at_multiple_resolutions = function(network, resolutions){
   resolutions %>% set_names() %>%
@@ -196,6 +198,7 @@ create_communities_at_multiple_resolutions = function(network, resolutions){
   )
 }
 modules_resolutions = networks %>% map(~create_communities_at_multiple_resolutions(.x, seq(2, 4, by = 0.25)))
+saveRDS(modules_resolutions, here('output/coexpression/modules_resolutions.rds'))
 # https://github.com/krishnanlab/RNAseq_coexpression/tree/main/gold_standards
 go_specific = read_tsv(here('data/raw/gobp_specific_terms.txt'), col_names = c('go_id', 'go_description'))
 go_intermediate = read_tsv(here('data/raw/gobp_intermediate_terms.txt'), col_names = c('go_id', 'go_description'))  
@@ -376,7 +379,11 @@ bgc_optimization_results %>%
 # Downsampled TMM with a resolution of 2.75 scored the best overall for BGC and GO categories being in the same module
 # Zscore also scored very well for BGC. 
 modules = modules_resolutions$downsample_tmm$`2.75` # or modules_resolutions$zscore$`3` 
+saveRDS(modules, here('output/coexpression/modules.rds'))
+saveRDS(modules, here('shiny_app/data/modules.rds'))
 network = networks$downsample_tmm
+saveRDS(network, here('output/coexpression/network.rds'))
+saveRDS(network, here('shiny_app/data/network.rds'))
 random_optimization_results = modules_resolutions %>% 
   imap(function(modules_set, normalization_type){
     modules_set %>% imap(function(module, resolution){
