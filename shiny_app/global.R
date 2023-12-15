@@ -11,6 +11,7 @@ require(visNetwork)
 library(tidyverse)
 
 #setwd('shiny_app')
+shinyOptions(cache = cachem::cache_disk('cache'))
 tpm_jcvi = read_csv('data/A_flavus_jcvi_tpm.csv', show_col_types = FALSE)
 tpm_chrom_level = read_csv('data/A_flavus_chrom_level_tpm.csv', show_col_types = FALSE)
 vst_jcvi = read_csv('data/vst_jcvi.csv', show_col_types = FALSE)
@@ -83,3 +84,14 @@ mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00',
 AF_genes = c('AFLA_139150', 'AFLA_139160', 'AFLA_139170', 'AFLA_139180', 'AFLA_139190', 'AFLA_139200', 'AFLA_139210', 'AFLA_139220', 'AFLA_139230', 'AFLA_139240', 'AFLA_139250', 'AFLA_139260', 'AFLA_139270', 'AFLA_139280', 'AFLA_139290', 'AFLA_139300', 'AFLA_139310', 'AFLA_139320', 'AFLA_139330', 'AFLA_139340', 'AFLA_139360', 'AFLA_139370', 'AFLA_139380', 'AFLA_139390', 'AFLA_139400', 'AFLA_139410', 'AFLA_139420', 'AFLA_139430', 'AFLA_139440')
 modules = readRDS('data/modules.rds')
 network = readRDS('data/network.rds')
+annotation_list_network = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
+                            'Subcellular localization (DeepLoc)', 'Interpro domains') %>% purrr::set_names() %>% 
+  map(~annotation_col_to_df(.x, annotation = functional_annotation_jcvi %>% 
+                              filter(gene_id %in% V(network)$name)))
+annotation_list_network[['Gene list (Comma separated)']] = functional_annotation_jcvi %>%
+  select(gene_id) %>%
+  filter(gene_id %in% V(network)$name) %>%
+  mutate(display_text = gene_id, column_to_select = gene_id) %>%
+  rowwise() %>%
+  mutate(gene_id = list(gene_id)) %>%
+  ungroup()

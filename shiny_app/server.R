@@ -43,7 +43,7 @@ server = function(input, output, session) {
     rv$normalization_method_short = str_remove(input$normalization_method, ' .*')
   })
   ## Create metadata table when bar in plot is clicked
-  output$sample_metadata_table = renderDT({
+  output$sample_metadata_table = renderDataTable({
     click_data = event_data('plotly_click')
     validate(need(!is.null(click_data), 'Click on a bar to get further sample data'))
       metadata %>% filter(run == click_data$key) %>%
@@ -172,25 +172,72 @@ server = function(input, output, session) {
  
   ### Co-expression network ###
   create_network = function(gene_ids, network){
-    #gene_ids = str_split_1(gene_ids, ',|\\s')
+    gene_list_provided = input$annotation_category_network == 'Gene list (Comma separated)'
     gene_ids = gene_ids[gene_ids %in% V(network)$name]
-    if (input$show_neighbors){
+    if (input$show_neighbors & gene_list_provided){
+      ## Showing first order neighboring nodes of provided gene ids
       node_neighbors = ego(network, order = 1, nodes = gene_ids)
       g = induced_subgraph(network, unlist(node_neighbors))
-      V(g)$selected = V(g)$name  %in% gene_ids
+      rv$displayed_nodes = unlist(node_neighbors) %>% names() %>% unique()
       V(g)$group = ifelse(V(g)$name %in% gene_ids, 'query_genes', 'neighbors')
       data = toVisNetworkData(g)
+      data$edges = data$edges %>% 
+        mutate(query_gene = (from %in% gene_ids) | (to %in% gene_ids)) %>%
+        group_by(query_gene) %>% 
+        slice_max(abs_r, n=5000) %>%
+        ungroup()
+      print(table(data$edges$r > 0))
+      data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
       visNetwork(nodes = data$nodes, edges = data$edges) %>%
         visIgraphLayout(randomSeed=1234, type = "full") %>%
-        visEdges(width=1, color='lightgray', smooth = FALSE) %>%
+        visEdges(width=1, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        visGroups(groupname = "neighbors", color = "lightgrey") %>%
-        visGroups(groupname = "query_genes", color = "lightblue", size=30) %>%
-        visLegend(position = 'right')
-    } else { # Since not coloring which genes are original vs neighbor, can color by annotation
+        #visGroups(groupname = "neighbors", color = "lightgrey") %>%
+        #visGroups(groupname = "query_genes", color = "lightblue", size=30) %>%
+        visLegend(position = 'right', main = "Legend")
+    } else if (!input$show_neighbors & !gene_list_provided) { 
+      ## No gene list provided and neighbors not shown, coloring by annotation
       g = induced_subgraph(network, gene_ids)
+      rv$displayed_nodes = gene_ids
       data = toVisNetworkData(g)
-      if (input$annotation_category_network != 'Gene list (Comma separated)'){
+      data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
+      annotations = input$gene_categories_network %>% str_remove(' \\(\\d+? genes\\)')
+      temp = data$nodes %>% select(id, group = !!sym(input$annotation_category_network)) %>% 
+        separate_longer_delim(group, ';') %>% 
+        filter(group %in% annotations) %>% 
+        group_by(id) %>%
+        summarize(group = str_c(sort(group), collapse=';'))
+      data$nodes = data$nodes %>% left_join(temp, by='id')
+      visNetwork(nodes = data$nodes, edges = data$edges) %>%
+        visIgraphLayout(randomSeed=1234, type = "full") %>%
+        visEdges(width=1, smooth = FALSE) %>%
+        visNodes(opacity=0.5) %>%
+        visLegend(position = 'right', main = "Legend")
+      } else if (!input$show_neighbors & gene_list_provided) { 
+      # Gene list provided but don't need neighbors
+        g = induced_subgraph(network, gene_ids)
+        rv$displayed_nodes = gene_ids
+        data = toVisNetworkData(g)
+      visNetwork(nodes = data$nodes, edges = data$edges) %>%
+        visIgraphLayout(randomSeed=1234, type = "full") %>%
+        visEdges(width=1, smooth = FALSE) %>%
+        visNodes(opacity=0.5) %>%
+        visLegend(position = 'right', main = "Legend")
+      } else if (input$show_neighbors & !gene_list_provided) { 
+        # No gene list provided and show neighbors
+        
+        node_neighbors = ego(network, order = 1, nodes = gene_ids)
+        g = induced_subgraph(network, unlist(node_neighbors))
+        rv$displayed_nodes = unlist(node_neighbors) %>% names() %>% unique()
+        #V(g)$group = ifelse(V(g)$name %in% gene_ids, 'query_genes', 'neighbors')
+        data = toVisNetworkData(g)
+        data$edges = data$edges %>% 
+          mutate(query_gene = (from %in% gene_ids) | (to %in% gene_ids)) %>%
+          group_by(query_gene) %>% 
+          slice_max(abs_r, n=10000, with_ties = FALSE) %>%
+          ungroup()
+        print(table(data$edges$r > 0))
+        data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
         annotations = input$gene_categories_network %>% str_remove(' \\(\\d+? genes\\)')
         temp = data$nodes %>% select(id, group = !!sym(input$annotation_category_network)) %>% 
           separate_longer_delim(group, ';') %>% 
@@ -198,26 +245,13 @@ server = function(input, output, session) {
           group_by(id) %>%
           summarize(group = str_c(sort(group), collapse=';'))
         data$nodes = data$nodes %>% left_join(temp, by='id')
-        visnet = visNetwork(nodes = data$nodes, edges = data$edges)
-        #for (idx in seq(1:length(annotations))){
-        #  visnet = visGroups(visnet, groupname = annotations[idx], color = mpn65[idx])
-        #}
-        visnet %>%
+        visNetwork(nodes = data$nodes, edges = data$edges) %>%
           visIgraphLayout(randomSeed=1234, type = "full") %>%
-          visEdges(width=1, color='lightgray', smooth = FALSE) %>%
+          visEdges(width=1, smooth = FALSE) %>%
           visNodes(opacity=0.5) %>%
-          visLegend(position = 'right')
-      } else { # Gene list provided
-      visNetwork(nodes = data$nodes, edges = data$edges) %>%
-        visIgraphLayout(randomSeed=1234, type = "full") %>%
-        visEdges(width=1, color='lightgray', smooth = FALSE) %>%
-        visNodes(opacity=0.5) %>%
-        visGroups(groupname = "neighbors", color = "lightgrey") %>%
-        visGroups(groupname = "query_genes", color = "lightblue", size=30) %>%
-        visLegend(position = 'right')
+          visLegend(position = 'right', main = "Legend")
       }
     }
-  }
   observeEvent(input$generate_network,{
       output$network_vis = renderVisNetwork({
         create_network(annotation_list[[input$annotation_category_network]] %>% 
@@ -234,7 +268,7 @@ server = function(input, output, session) {
       })
   observe({
     updateSelectInput(session, "gene_categories_network",
-                      choices = annotation_list[[input$annotation_category_network]] %>% 
+                      choices = annotation_list_network[[input$annotation_category_network]] %>% 
                         pull(display_text))
   })
   output$node_data_from_network  = function(){
@@ -253,7 +287,23 @@ server = function(input, output, session) {
       invisible()
     }
   }
-  
+  observeEvent(input$perform_enrichment,{
+    output$enrichment_table = renderDataTable({
+      enrich_res = enrichment_test(gene_list = list('network' = rv$displayed_nodes),
+                                   columns_list = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
+                                                    'Subcellular localization (DeepLoc)', 'Interpro domains'),
+                                   functional_annotation_jcvi %>% filter(gene_id %in% V(network)$name)) %>% 
+        mutate(padjust = p.adjust(pval, method = 'fdr')) %>%
+        filter(padjust < 0.05) %>% 
+        select(-pval, -gene_list_name) %>%
+        relocate(c(padjust, annotation_category), .after = all) %>% 
+        rename(n_genes_subnetwork = genes, n_genes_all_network = all, pvalue_adjusted = padjust) %>% 
+        arrange(pvalue_adjusted)
+      print(enrich_res)
+      enrich_res
+    }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+  })
+
   ### PCA ###
   create_pca = function(){
     vsd = dataset_pca()
@@ -288,7 +338,8 @@ server = function(input, output, session) {
   
   output$pca = renderPlotly({
     create_pca()
-  })
+  }) %>%
+    bindCache(input$dataset_pca, input$pc_x, input$category_to_color_pca)
   ## Create metadata table when a sample in the PCA plot is clicked
   output$sample_metadata_table_pca = renderDataTable({
     click_data_pca = event_data('plotly_click')

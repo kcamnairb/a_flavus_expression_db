@@ -16,7 +16,7 @@ ui = navbarPage(
              ),
              mainPanel(
                plotlyOutput('barplot'),
-               DTOutput('sample_metadata_table')
+               dataTableOutput('sample_metadata_table')
              )
            )
   ),
@@ -97,10 +97,12 @@ ui = navbarPage(
                              label = 'Show neighbors', 
                              value = FALSE),
                actionButton("generate_network", "Generate network"),
+               actionButton("perform_enrichment", "Perform functional term enrichment analysis of shown genes"),
              ),
              mainPanel(
                visNetworkOutput("network_vis", height = '600px'),
                htmlOutput("node_data_from_network"),
+               dataTableOutput('enrichment_table')
              )
            )
   ),
