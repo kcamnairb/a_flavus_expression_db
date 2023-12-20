@@ -9,7 +9,7 @@ library(kableExtra)
 library(igraph)
 require(visNetwork)
 library(tidyverse)
-
+source('bc3net_enrichment_modified.R')
 #setwd('shiny_app')
 shinyOptions(cache = cachem::cache_disk('cache'))
 tpm_jcvi = read_csv('data/A_flavus_jcvi_tpm.csv', show_col_types = FALSE)

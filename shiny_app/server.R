@@ -1,5 +1,3 @@
-#save.image('data/data.RData')
-#load('data/data.RData')
 server = function(input, output, session) {
   ### Barplot ###
   dataset_input = reactive({
@@ -51,7 +49,7 @@ server = function(input, output, session) {
         mutate(across(everything(), as.character)) %>%
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value))  
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't'))
   ## Add a download button to download a csv of the expression data
   output$download_single_gene_data = downloadHandler(
     filename = function() {
@@ -158,10 +156,12 @@ server = function(input, output, session) {
         gene_data = functional_annotation_jcvi %>%
           filter(gene_id == gene) %>%
           select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
+          mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
+                 `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
           pivot_longer(everything(), names_to='category', values_to='value') %>%
           filter(!is.na(value)) %>%
           add_row(category = 'log_TPM', value = as.character(round(log_TPM, 2)))
-        kable(bind_rows(gene_data, run_data), 'html', col.names = NULL) %>%
+        kable(bind_rows(gene_data, run_data), 'html', col.names = NULL, escape = FALSE) %>%
           kable_styling(bootstrap_options = c("striped")) %>%
           pack_rows('gene data',  1, nrow(gene_data)) %>%
           pack_rows('SRA run data',  nrow(gene_data) + 1, nrow(run_data)) %>%
@@ -172,29 +172,34 @@ server = function(input, output, session) {
  
   ### Co-expression network ###
   create_network = function(gene_ids, network){
+    ledges = data.frame(color = c('lightgray', 'hotpink'), 
+                        label = c('positive correlation', 'negative correlation'), 
+                        font.align = "top") 
     gene_list_provided = input$annotation_category_network == 'Gene list (Comma separated)'
     gene_ids = gene_ids[gene_ids %in% V(network)$name]
+    print(paste('gene_ids:', gene_ids))
     if (input$show_neighbors & gene_list_provided){
       ## Showing first order neighboring nodes of provided gene ids
+      #gene_ids = 'AFLA_006380'
+      #AFLA_126620 good gene for testing edge sign legend
       node_neighbors = ego(network, order = 1, nodes = gene_ids)
       g = induced_subgraph(network, unlist(node_neighbors))
+      ## Limit the number of edges to the top 50000.
+      edge_weight_cutoff = E(g)$abs_r %>% sort(decreasing = TRUE) %>% .[50000]
+      ## Creating a new network with the minimum edge weight was a straightforward way to remove isolated nodes.
+      network2 = delete.edges(network, which(E(network)$abs_r < edge_weight_cutoff))
+      node_neighbors = ego(network2, order = 1, nodes = gene_ids)
+      g = induced_subgraph(network2, unlist(node_neighbors))
       rv$displayed_nodes = unlist(node_neighbors) %>% names() %>% unique()
       V(g)$group = ifelse(V(g)$name %in% gene_ids, 'query_genes', 'neighbors')
-      data = toVisNetworkData(g)
-      data$edges = data$edges %>% 
-        mutate(query_gene = (from %in% gene_ids) | (to %in% gene_ids)) %>%
-        group_by(query_gene) %>% 
-        slice_max(abs_r, n=5000) %>%
-        ungroup()
+      data = toVisNetworkData(g) 
       print(table(data$edges$r > 0))
       data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
       visNetwork(nodes = data$nodes, edges = data$edges) %>%
-        visIgraphLayout(randomSeed=1234, type = "full") %>%
+        visIgraphLayout(randomSeed=1234, type = "full", layout = 'layout_with_fr') %>%
         visEdges(width=1, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        #visGroups(groupname = "neighbors", color = "lightgrey") %>%
-        #visGroups(groupname = "query_genes", color = "lightblue", size=30) %>%
-        visLegend(position = 'right', main = "Legend")
+        visLegend(position = 'right', main = "Legend", addEdges = ledges)
     } else if (!input$show_neighbors & !gene_list_provided) { 
       ## No gene list provided and neighbors not shown, coloring by annotation
       g = induced_subgraph(network, gene_ids)
@@ -212,7 +217,7 @@ server = function(input, output, session) {
         visIgraphLayout(randomSeed=1234, type = "full") %>%
         visEdges(width=1, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        visLegend(position = 'right', main = "Legend")
+        visLegend(position = 'right', main = "Legend", addEdges = ledges)
       } else if (!input$show_neighbors & gene_list_provided) { 
       # Gene list provided but don't need neighbors
         g = induced_subgraph(network, gene_ids)
@@ -222,20 +227,24 @@ server = function(input, output, session) {
         visIgraphLayout(randomSeed=1234, type = "full") %>%
         visEdges(width=1, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        visLegend(position = 'right', main = "Legend")
+        visLegend(position = 'right', main = "Legend", useGroups = FALSE, addEdges = ledges)
       } else if (input$show_neighbors & !gene_list_provided) { 
         # No gene list provided and show neighbors
         
         node_neighbors = ego(network, order = 1, nodes = gene_ids)
         g = induced_subgraph(network, unlist(node_neighbors))
+        
+        edge_weight_cutoff = E(g)$abs_r %>% sort(decreasing = TRUE) %>% .[50000]
+        network2 = delete.edges(network, which(E(network)$abs_r < edge_weight_cutoff))
+        print(length(gene_ids))
+        gene_ids = gene_ids[gene_ids %in% V(network2)$name]
+        print(length(gene_ids))
+        node_neighbors = ego(network2, order = 1, nodes = gene_ids)
+        g = induced_subgraph(network2, unlist(node_neighbors))
+        print('g = induced_subgraph(network2, unlist(node_neighbors))')
+        print(g)
         rv$displayed_nodes = unlist(node_neighbors) %>% names() %>% unique()
-        #V(g)$group = ifelse(V(g)$name %in% gene_ids, 'query_genes', 'neighbors')
         data = toVisNetworkData(g)
-        data$edges = data$edges %>% 
-          mutate(query_gene = (from %in% gene_ids) | (to %in% gene_ids)) %>%
-          group_by(query_gene) %>% 
-          slice_max(abs_r, n=10000, with_ties = FALSE) %>%
-          ungroup()
         print(table(data$edges$r > 0))
         data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
         annotations = input$gene_categories_network %>% str_remove(' \\(\\d+? genes\\)')
@@ -244,17 +253,20 @@ server = function(input, output, session) {
           filter(group %in% annotations) %>% 
           group_by(id) %>%
           summarize(group = str_c(sort(group), collapse=';'))
-        data$nodes = data$nodes %>% left_join(temp, by='id')
+        data$nodes = data$nodes %>% left_join(temp, by='id') %>%
+          replace_na(list(group = "neighbor"))
+        
         visNetwork(nodes = data$nodes, edges = data$edges) %>%
           visIgraphLayout(randomSeed=1234, type = "full") %>%
           visEdges(width=1, smooth = FALSE) %>%
           visNodes(opacity=0.5) %>%
-          visLegend(position = 'right', main = "Legend")
+          visLegend(position = 'right', main = "Legend", addEdges = ledges)
       }
     }
   observeEvent(input$generate_network,{
       output$network_vis = renderVisNetwork({
-        create_network(annotation_list[[input$annotation_category_network]] %>% 
+        validate(need(!is.null(input$gene_categories_network), message = FALSE))
+        create_network(annotation_list_network[[input$annotation_category_network]] %>% 
                          filter(display_text %in% input$gene_categories_network) %>% 
                          pull(gene_id) %>% unlist() %>%
                          str_split(',') %>% unlist(), 
@@ -277,9 +289,12 @@ server = function(input, output, session) {
       gene_data = functional_annotation_jcvi %>%
         filter(gene_id == input$click) %>%
         select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
+        mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
+               `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
+        # paste0("<a href='",mydata$url,"' target='_blank'>",mydata$url,"</a>")
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value)) 
-      kable(gene_data, 'html', col.names = NULL) %>%
+      kable(gene_data, 'html', escape = FALSE, col.names = NULL) %>%
         kable_styling(bootstrap_options = c("striped")) %>%
         pack_rows('gene data',  1, nrow(gene_data)) %>%
         HTML()
@@ -289,6 +304,7 @@ server = function(input, output, session) {
   }
   observeEvent(input$perform_enrichment,{
     output$enrichment_table = renderDataTable({
+      validate(need(!is.null(input$gene_categories_network), message = FALSE))
       enrich_res = enrichment_test(gene_list = list('network' = rv$displayed_nodes),
                                    columns_list = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
                                                     'Subcellular localization (DeepLoc)', 'Interpro domains'),
@@ -299,9 +315,9 @@ server = function(input, output, session) {
         relocate(c(padjust, annotation_category), .after = all) %>% 
         rename(n_genes_subnetwork = genes, n_genes_all_network = all, pvalue_adjusted = padjust) %>% 
         arrange(pvalue_adjusted)
-      print(enrich_res)
       enrich_res
-    }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+    }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't',
+                                      caption = 'Enrichment results:'))
   })
 
   ### PCA ###
