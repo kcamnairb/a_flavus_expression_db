@@ -23,9 +23,9 @@ ui = navbarPage(
   tabPanel('Multiple gene heatmap ',
            sidebarLayout(
              sidebarPanel(
-               selectInput(inputId = 'dataset',
-                           label = 'Choose an assembly/annotation:',
-                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               #selectInput(inputId = 'dataset',
+               #            label = 'Choose an assembly/annotation:',
+               #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
                selectInput(inputId = 'normalization_method',
                            label = 'Choose an normalization method:',
                            choices = c('TPM (transcripts per million)', 'VST (variance stabilizing transformation)')),
@@ -74,9 +74,9 @@ ui = navbarPage(
                #  label = 'Gene IDs (Comma or whitespace separated)'
                #),
                
-               selectInput(inputId = 'dataset_network',
-                           label = 'Choose an assembly/annotation:',
-                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               #selectInput(inputId = 'dataset_network',
+               #            label = 'Choose an assembly/annotation:',
+               #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
                selectInput(inputId = 'annotation_category_network', 
                            label = 'Choose type of annotation', 
                            choices = annotation_categories, 
@@ -95,9 +95,14 @@ ui = navbarPage(
                               }"))),
                checkboxInput(inputId = 'show_neighbors', 
                              label = 'Show neighbors', 
-                             value = FALSE),
+                             value = TRUE),
                actionButton("generate_network", "Generate network"),
+               br(),
+               br(),
                actionButton("perform_enrichment", "Perform functional term enrichment analysis of shown genes"),
+               br(),
+               br(),
+               downloadButton('download_network_data', label = 'Download network data for shown genes')
              ),
              mainPanel(
                visNetworkOutput("network_vis", height = '600px'),
