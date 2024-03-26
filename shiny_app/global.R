@@ -9,15 +9,18 @@ library(kableExtra)
 library(igraph)
 require(visNetwork)
 library(openxlsx)
+library(JBrowseR)
 library(tidyverse)
 source('bc3net_enrichment_modified.R')
+pdf(file = NULL)
 #setwd('shiny_app')
-shinyOptions(cache = cachem::cache_disk('cache'))
-tpm_jcvi = read_csv('data/A_flavus_jcvi_tpm.csv', show_col_types = FALSE)
-tpm_chrom_level = read_csv('data/A_flavus_chrom_level_tpm.csv', show_col_types = FALSE)
-vst_jcvi = read_csv('data/vst_jcvi.csv', show_col_types = FALSE)
-vst_chrom_level = read_csv('data/vst_chrom_level.csv', show_col_types = FALSE)
-
+#load('data/flavus_expression_db.RData')
+#shinyOptions(cache = cachem::cache_disk('cache'))
+#tpm_jcvi = read_csv('data/A_flavus_jcvi_tpm.csv', show_col_types = FALSE)
+#tpm_chrom_level = read_csv('data/A_flavus_chrom_level_tpm.csv', show_col_types = FALSE)
+#vst_jcvi = read_csv('data/vst_jcvi.csv', show_col_types = FALSE)
+#vst_chrom_level = read_csv('data/vst_chrom_level.csv', show_col_types = FALSE)
+#
 metadata = read_csv('data/sra_metadata_filtered.csv', show_col_types = FALSE) %>%
   select(-collection_date, run_title = title2) %>%
   dplyr::rename(growth_condition = `growth condition`) %>%
@@ -82,8 +85,10 @@ mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00',
           '#969696','#bdbdbd','#f43600','#4ba93b','#5779bb','#927acc','#97ee3f','#bf3947','#9f5b00','#f48758','#8caed6',
           '#f2b94f','#eff26e','#e43872','#d9b100','#9d7a00','#698cff','#d9d9d9','#00d27e','#d06800','#009f82','#c49200',
           '#cbe8ff','#fecddf','#c27eb6','#8cd2ce','#c4b8d9','#f883b0','#a49100','#f48800','#27d0df','#a04a9b')
-AF_genes = c('AFLA_139150', 'AFLA_139160', 'AFLA_139170', 'AFLA_139180', 'AFLA_139190', 'AFLA_139200', 'AFLA_139210', 'AFLA_139220', 'AFLA_139230', 'AFLA_139240', 'AFLA_139250', 'AFLA_139260', 'AFLA_139270', 'AFLA_139280', 'AFLA_139290', 'AFLA_139300', 'AFLA_139310', 'AFLA_139320', 'AFLA_139330', 'AFLA_139340', 'AFLA_139360', 'AFLA_139370', 'AFLA_139380', 'AFLA_139390', 'AFLA_139400', 'AFLA_139410', 'AFLA_139420', 'AFLA_139430', 'AFLA_139440')
-modules = readRDS('data/modules.rds')
+#AF_genes = c('AFLA_139150', 'AFLA_139160', 'AFLA_139170', 'AFLA_139180', 'AFLA_139190', 'AFLA_139200', 'AFLA_139210', 'AFLA_139220', 'AFLA_139230', 'AFLA_139240', 'AFLA_139250', 'AFLA_139260', 'AFLA_139270', 'AFLA_139280', 'AFLA_139290', 'AFLA_139300', 'AFLA_139310', 'AFLA_139320', 'AFLA_139330', 'AFLA_139340', 'AFLA_139360', 'AFLA_139370', 'AFLA_139380', 'AFLA_139390', 'AFLA_139400', 'AFLA_139410', 'AFLA_139420', 'AFLA_139430', 'AFLA_139440')
+
+
+#modules = readRDS('data/modules.rds')
 network = readRDS('data/network.rds')
 annotation_list_network = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
                             'Subcellular localization (DeepLoc)', 'Interpro domains') %>% purrr::set_names() %>% 
@@ -96,3 +101,21 @@ annotation_list_network[['Gene list (Comma separated)']] = functional_annotation
   rowwise() %>%
   mutate(gene_id = list(gene_id)) %>%
   ungroup()
+#save.image(file='data/flavus_expression_db.RData', compress = FALSE)
+#data_server = serve_data('data')
+#assembly = assembly(
+#  "http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.fa.gz",
+#  bgzip = TRUE
+#)
+#annotations_track = track_feature(
+#  "http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.58_sorted_nosup.gff3.gz",
+#  assembly
+#)
+#bw_track = track_wiggle("http://127.0.0.1:5000/test.bw", assembly)
+#tracks = tracks(annotations_track, bw_track)
+#default_session = default_session(
+#  assembly,
+#  c(annotations_track)
+#)
+
+

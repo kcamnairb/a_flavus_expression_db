@@ -2,13 +2,18 @@ ui = navbarPage(
   tags$style("#fieldsPanel {font-size:10px;height:10px;}
              #group input {height:10px;}"
   ),
+  id='tabs',
   title = 'Aspergillus flavus expression database',
   tabPanel('Single gene barplot ',
            sidebarLayout(
              sidebarPanel(
-               selectInput(inputId = 'dataset',
-                           label = 'Choose an assembly/annotation:',
-                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               #selectInput(inputId = 'dataset',
+               #            label = 'Choose an assembly/annotation:',
+               #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               selectInput(inputId = 'normalization_method_barplot',
+                           label = 'Choose normalization method:',
+                           choices = c('TPM (transcripts per million)' = 'TPM', 
+                                       'VST (variance stabilizing transformation)' = 'VST')),
                textInput(inputId = 'gene_id',
                          label = 'Gene ID',
                          value = 'AFLA_139360'),
@@ -26,9 +31,10 @@ ui = navbarPage(
                #selectInput(inputId = 'dataset',
                #            label = 'Choose an assembly/annotation:',
                #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
-               selectInput(inputId = 'normalization_method',
-                           label = 'Choose an normalization method:',
-                           choices = c('TPM (transcripts per million)', 'VST (variance stabilizing transformation)')),
+               selectInput(inputId = 'normalization_method_heatmap',
+                           label = 'Choose normalization method:',
+                           choices = c('log TPM (transcripts per million)' = 'TPM', 
+                                       'VST (variance stabilizing transformation)' = 'VST')),
                selectInput(inputId = 'annotation_category', 
                            label = 'Choose type of annotation', 
                            choices = annotation_categories, 
@@ -55,7 +61,10 @@ ui = navbarPage(
                actionButton("generate_heatmap", "Generate heatmap"),
                br(),
                br(),
-               downloadButton('download_multi_gene_data', label = 'Download expression data for these genes')
+               downloadButton('download_multi_gene_data', label = 'Download expression data for these genes'),
+               br(),
+               br(),
+               downloadButton('download_entire_expression_dataset', label = 'Download entire expression dataset')
              ),
              mainPanel(
                conditionalPanel(
@@ -66,7 +75,7 @@ ui = navbarPage(
            )
   ),
   
-  tabPanel('Co-expression network ',
+  tabPanel(title = 'Co-expression network ',
            sidebarLayout(
              sidebarPanel(
                #textInput(
@@ -130,6 +139,22 @@ ui = navbarPage(
                dataTableOutput('sample_metadata_table_pca')
              )
            )
+  ),
+  tabPanel('JBrowse ',
+           #sidebarLayout(
+           #  sidebarPanel(
+           #    selectInput(inputId = 'dataset_pca',
+           #                label = 'Choose an assembly/annotation:',
+           #                choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+           #    selectInput(inputId = 'pc_x',
+           #                label = 'principal component to display',
+           #                choices = seq(1, 10),
+           #                selected = 1),
+           #    selectizeInput(inputId = 'category_to_color_pca', 
+           #                   label = 'Category to color samples by', 
+           #                   choices = c('bioproject', 'strain'))
+           #  ),
+           JBrowseROutput("jbrowse_output")
   ),
   theme = bs_theme(bootswatch = 'cerulean')
 )

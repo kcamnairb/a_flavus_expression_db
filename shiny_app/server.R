@@ -1,11 +1,19 @@
 server = function(input, output, session) {
   ### Barplot ###
-  dataset_input = reactive({
-    switch(paste(input$dataset, input$normalization_method),
-           'GCA_000006275.2 (JCVI-afl1-v2.0) TPM (transcripts per million)' = tpm_jcvi,
-           'GCA_009017415.1 (chromosome level) TPM (transcripts per million)' = tpm_chrom_level,
-           'GCA_000006275.2 (JCVI-afl1-v2.0) VST (variance stabilizing transformation)' = vst_jcvi,
-           'GCA_009017415.1 (chromosome level) VST (variance stabilizing transformation)' = vst_chrom_level)
+  dataset_input_barplot = reactive({
+    #switch(paste(input$dataset, input$normalization_method),
+    #       'GCA_000006275.2 (JCVI-afl1-v2.0) TPM (transcripts per million)' = tpm_jcvi,
+    #       'GCA_009017415.1 (chromosome level) TPM (transcripts per million)' = tpm_chrom_level,
+    #       'GCA_000006275.2 (JCVI-afl1-v2.0) VST (variance stabilizing transformation)' = vst_jcvi,
+    #       'GCA_009017415.1 (chromosome level) VST (variance stabilizing transformation)' = vst_chrom_level)
+    switch(input$normalization_method_barplot, 
+           'TPM' = read_csv('data/A_flavus_jcvi_tpm.csv', show_col_types = FALSE),
+           'VST' = read_csv('data/vst_jcvi.csv', show_col_types = FALSE))
+  })
+  dataset_input_heatmap = reactive({
+    switch(input$normalization_method_heatmap, 
+           'TPM' = tpm_jcvi,
+           'VST' = vst_jcvi)
   })
   dataset_pca = reactive({
     switch(input$dataset_pca,
@@ -14,32 +22,32 @@ server = function(input, output, session) {
   })
   rv = reactiveValues()
   single_gene_barplot = function(df, gene_of_interest){
-    dataset_input() %>%
+    dataset_input_barplot() %>%
       filter(gene_id == gene_of_interest) %>%
-      pivot_longer(-gene_id, names_to='sra_run', values_to='TPM') %>%
+      pivot_longer(-gene_id, names_to='sra_run', values_to='expr_value') %>%
       left_join(metadata, by=c('sra_run' = 'run')) %>%
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
              sra_run = fct_inorder(sra_run)) %>%
-      ggplot(aes(sra_run, TPM, fill=bioproject, label=sample_description, key=sra_run)) +
+      ggplot(aes(sra_run, expr_value, fill=bioproject, label=sample_description, key=sra_run)) +
       geom_col() +
       scale_fill_manual(values = mpn65) +
-      labs(title = gene_of_interest, x='Sample') +
+      labs(title = gene_of_interest, x='Sample', y=input$normalization_method_barplot) +
       ggeasy::easy_remove_legend() +
       ggeasy::easy_remove_x_axis(what=c('tics', 'text', 'line')) +
       ggeasy::easy_center_title()
   }
   
   output$barplot = renderPlotly({
-    single_gene_barplot(dataset_input(), input$gene_id)
+    single_gene_barplot(dataset_input_barplot(), input$gene_id)
   }) 
   ## Change default gene_id value if the dataset changes
-  observe({
-    updateTextInput(inputId = 'gene_id', 
-                    value = ifelse(input$dataset == 'GCA_000006275.2 (JCVI-afl1-v2.0)', 
-                                   'AFLA_139360', 'F9C07_7811'))
-    rv$normalization_method_short = str_remove(input$normalization_method, ' .*')
-  })
+  #observe({
+  #  updateTextInput(inputId = 'gene_id', 
+  #                  value = ifelse(input$dataset == 'GCA_000006275.2 (JCVI-afl1-v2.0)', 
+  #                                 'AFLA_139360', 'F9C07_7811'))
+  #  rv$normalization_method_short = str_remove(input$normalization_method, ' .*')
+  #})
   ## Create metadata table when bar in plot is clicked
   output$sample_metadata_table = renderDataTable({
     click_data = event_data('plotly_click')
@@ -50,26 +58,26 @@ server = function(input, output, session) {
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value))  
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't'))
-  ## Add a download button to download a csv of the expression data
+  ## Add a download button to download a table of the expression data
   output$download_single_gene_data = downloadHandler(
     filename = function() {
-      paste0(input$gene_id, '_data.csv')
+      paste0(input$gene_id, '_data.xlsx')
     },
     content = function(file) {
-      df = dataset_input()
+      df = dataset_input_barplot()
       df = df %>% filter(gene_id == input$gene_id) %>%
         pivot_longer(-gene_id, names_to='sra_run', values_to='TPM') %>%
         left_join(metadata, by=c('sra_run' = 'run')) %>%
         arrange(bioproject, sra_run)
-      write.csv(df, file, row.names = FALSE)
+      openxlsx::write.xlsx(df, file, firstRow = TRUE)
     })
   ### Multi-gene heatmap ###
   output$download_multi_gene_data = downloadHandler(
     filename = function(){
-      paste0('A_flavus_', rv$normalization_method_short, '.csv')
+      paste0('A_flavus_', input$normalization_method_heatmap, '.xlsx')
       },
     content = function(file){
-      df = dataset_input()
+      df = dataset_input_heatmap()
       sra_runs_to_include = metadata %>%
         filter(bioproject %in% input$bioprojects_to_include) %>%
         pull(run)
@@ -79,7 +87,19 @@ server = function(input, output, session) {
       df = df %>% 
         filter(gene_id %in% gene_ids_to_include) %>%
         select(all_of(c('gene_id', sra_runs_to_include)))
-      write.csv(df, file, row.names = FALSE)
+      openxlsx::write.xlsx(df, file, firstRow = TRUE)
+    }
+  )
+  output$download_entire_expression_dataset = downloadHandler(
+    filename = function(){
+      paste0('A_flavus_', input$normalization_method_heatmap, '_entire_dataset.xlsx')
+    },
+    content = function(file){
+      df = dataset_input_heatmap()
+      openxlsx::write.xlsx(list(df, functional_annotation_jcvi) %>% 
+                             setNames(c(input$normalization_method_heatmap, 'functional_annotation')),
+                           file = file,
+                           firstRow = TRUE)
     }
   )
   multi_gene_heatmap = function(df, genes_of_interest, bioprojects_to_include){
@@ -89,7 +109,7 @@ server = function(input, output, session) {
       pivot_longer(-gene_id, names_to='sra_run', values_to='expression_value') %>%
       left_join(metadata, by=c('sra_run' = 'run')) %>%
       filter(bioproject %in% bioprojects_to_include) 
-    if (rv$normalization_method_short == 'TPM'){
+    if (input$normalization_method_heatmap == 'TPM'){
       df = df %>% mutate(expression_value = log1p(expression_value))
     } 
     if (length(input$gene_categories) > 1) {
@@ -109,12 +129,14 @@ server = function(input, output, session) {
         group_by(bioproject) %>%
         heatmap(gene_id, sra_run, expression_value, column_names_gp = gpar(fontsize = 8),
                 row_names_gp = gpar(fontsize = 8),
-                heatmap_legend_param = list(title = str_replace(rv$normalization_method_short, 'TPM', 'log_TPM')))
+                heatmap_legend_param = list(title = str_remove(input$normalization_method_heatmap, ' .*') %>%
+                                              str_replace('TPM', 'log_TPM')))
     } else{
       ht = df %>%
         heatmap(gene_id, sra_run, expression_value, column_names_gp = gpar(fontsize = 8),
                 row_names_gp = gpar(fontsize = 8),
-                heatmap_legend_param = list(title = str_replace(rv$normalization_method_short, 'TPM', 'log_TPM')))
+                heatmap_legend_param = list(title = str_remove(input$normalization_method_heatmap, ' .*') %>%
+                                              str_replace('TPM', 'log_TPM')))
     }
     if (length(input$gene_categories) > 1 & input$annotation_category != 'Gene list (Comma separated)') {
       column = sym(input$annotation_category)
@@ -128,7 +150,7 @@ server = function(input, output, session) {
   observeEvent(input$generate_heatmap,{
     makeInteractiveComplexHeatmap(
       input, output, session,
-      ht_list = multi_gene_heatmap(dataset_input(), 
+      ht_list = multi_gene_heatmap(dataset_input_heatmap(), 
                                    annotation_list[[input$annotation_category]] %>% 
                                      filter(display_text %in% input$gene_categories) %>% 
                                      pull(gene_id) %>% unlist() %>%
@@ -282,9 +304,10 @@ server = function(input, output, session) {
         })
       })
   observe({
-    updateSelectInput(session, "gene_categories_network",
-                      choices = annotation_list_network[[input$annotation_category_network]] %>% 
-                        pull(display_text))
+      updateSelectInput(session, "gene_categories_network",
+                        choices = annotation_list_network[[input$annotation_category_network]] %>% 
+                          pull(display_text)
+                        )
   })
   output$node_data_from_network  = function(){
     ## https://stackoverflow.com/questions/49913752/undo-click-event-in-visnetwork-in-r-shiny
@@ -329,7 +352,7 @@ server = function(input, output, session) {
       df$nodes = df$nodes %>% select(any_of(c('id','best blast hit','KEGG pathways','Gene Ontology','Interpro domains',
                                             'Subcellular localization (DeepLoc)','deeploc_score',
                                             'biosynthetic gene clusters','mibig_accession','mibig_compound')))
-      openxlsx::write.xlsx(df, file)
+      openxlsx::write.xlsx(df, file, firstRow = TRUE)
     }
   )
 
@@ -379,4 +402,17 @@ server = function(input, output, session) {
       pivot_longer(everything(), names_to='category', values_to='value') %>%
       filter(!is.na(value))  
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+  
+  ### JBrowse ###
+  output$jbrowse_output = renderJBrowseR(
+    JBrowseR("View", 
+             assembly = assembly, 
+             tracks = tracks,
+             defaultSession = default_session,
+             theme = theme("#2596be", "#2596be", "#2596be", "#2596be"),
+             #text_index = text_index("http://127.0.0.1:5000/trix/Aspergillus_flavus.ix",
+             #                        "http://127.0.0.1:5000/trix/Aspergillus_flavus.ixx",
+             #                        "http://127.0.0.1:5000/trix/Aspergillus_flavus_meta.json",
+             #                        "Aspergillus_flavus"),
+             location = "EQ963473:33515..37806"))
 }
