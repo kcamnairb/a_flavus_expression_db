@@ -7,9 +7,10 @@ ui = navbarPage(
   tabPanel('Single gene barplot ',
            sidebarLayout(
              sidebarPanel(
-               #selectInput(inputId = 'dataset',
-               #            label = 'Choose an assembly/annotation:',
-               #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               selectInput(inputId = 'dataset_barplot',
+                           label = 'Choose an assembly/annotation:',
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                       'GCA_009017415.1 (chromosome level)' = 'chrom_level')),
                selectInput(inputId = 'normalization_method_barplot',
                            label = 'Choose normalization method:',
                            choices = c('TPM (transcripts per million)' = 'TPM', 
@@ -28,13 +29,10 @@ ui = navbarPage(
   tabPanel('Multiple gene heatmap ',
            sidebarLayout(
              sidebarPanel(
-               #selectInput(inputId = 'dataset',
-               #            label = 'Choose an assembly/annotation:',
-               #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
-               selectInput(inputId = 'normalization_method_heatmap',
-                           label = 'Choose normalization method:',
-                           choices = c('log TPM (transcripts per million)' = 'TPM', 
-                                       'VST (variance stabilizing transformation)' = 'VST')),
+               selectInput(inputId = 'dataset_heatmap',
+                           label = 'Choose an assembly/annotation:',
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                       'GCA_009017415.1 (chromosome level)' = 'chrom_level')),
                selectInput(inputId = 'annotation_category', 
                            label = 'Choose type of annotation', 
                            choices = annotation_categories, 
@@ -78,14 +76,13 @@ ui = navbarPage(
   tabPanel(title = 'Co-expression network ',
            sidebarLayout(
              sidebarPanel(
-               #textInput(
-               #  inputId = 'gene_ids_network',
-               #  label = 'Gene IDs (Comma or whitespace separated)'
-               #),
-               
-               #selectInput(inputId = 'dataset_network',
-               #            label = 'Choose an assembly/annotation:',
-               #            choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+               selectInput(inputId = 'dataset_network',
+                           label = 'Choose an assembly/annotation:',
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                       'GCA_009017415.1 (chromosome level)' = 'chrom_level')),
+               selectInput(inputId = 'network_method',
+                           label = 'Choose a network construction method:',
+                           choices = c('VST -> WGCNA', 'UQ -> Pearson')),
                selectInput(inputId = 'annotation_category_network', 
                            label = 'Choose type of annotation', 
                            choices = annotation_categories, 
@@ -125,7 +122,8 @@ ui = navbarPage(
              sidebarPanel(
                selectInput(inputId = 'dataset_pca',
                            label = 'Choose an assembly/annotation:',
-                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
+                           choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                       'GCA_009017415.1 (chromosome level)' = 'chrom_level')),
                selectInput(inputId = 'pc_x',
                            label = 'principal component to display',
                            choices = seq(1, 10),

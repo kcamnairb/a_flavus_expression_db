@@ -1,8 +1,21 @@
 library(igraph)
-library(tidyverse)
 library(edgeR)
+library(WGCNA)
+library(sva)
 library(here)
-counts_jcvi = read_csv(here('output/salmon_quant/jcvi_counts.csv'))
+library(mmtable2)
+library(patchwork)
+library(grid)
+library(gridExtra)
+library(WGCNA)
+library(tidyverse)
+mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00','#7f80cd','#b3e900','#c42e60','#a65628',
+          '#f781bf','#8dd3c7','#bebada','#fb8072','#80b1d3','#fdb462','#fccde5','#bc80bd','#ffed6f','#c4eaff','#cf8c00',
+          '#1b9e77','#d95f02','#e7298a','#e6ab02','#a6761d','#0097ff','#00d067','#000000','#252525','#525252','#737373',
+          '#969696','#bdbdbd','#f43600','#4ba93b','#5779bb','#927acc','#97ee3f','#bf3947','#9f5b00','#f48758','#8caed6',
+          '#f2b94f','#eff26e','#e43872','#d9b100','#9d7a00','#698cff','#d9d9d9','#00d27e','#d06800','#009f82','#c49200',
+          '#cbe8ff','#fecddf','#c27eb6','#8cd2ce','#c4b8d9','#f883b0','#a49100','#f48800','#27d0df','#a04a9b')
+counts_jcvi = read_csv(here('output/star/jcvi_counts.csv'))
 counts_sums_jcvi = counts_jcvi %>% 
   pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
   group_by(run) %>%
@@ -23,14 +36,28 @@ downsample_counts_col = function(counts_col, sample_name, sample_num){
     dplyr::count(gene_id, name = sample_name)
 }
 samples_above_10m  = counts_sums_jcvi %>% 
-  filter(total_counts >= 10e6, run %in% colnames(tpm_jcvi)) %>% pull(run)
+  filter(total_counts >= 10e6) %>% pull(run)
 metadata = read_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
-tpm_jcvi= read_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_jcvi_tpm_unfiltered.csv'))
-tpm_jcvi = tpm_jcvi %>%
-  select(gene_id, all_of(metadata$run))
+#tpm_jcvi= read_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_jcvi_tpm_unfiltered.csv'))
+#tpm_jcvi = tpm_jcvi %>%
+#  select(gene_id, all_of(metadata$run))
+transcript_lengths_jcvi = read_csv('Z:/genomes/af3357_annotation/af3357_cds_lengths.csv', 
+                                   col_names = c('gene_id', 'length'))
+tpm_normalize = function(df) {
+  tpm_one_col = function(counts, gene_length)(counts / gene_length) / (sum(counts / gene_length) / 10^6)
+  df %>%
+    pivot_longer(-gene_id, names_to='sample_id', values_to='counts') %>%
+    left_join(transcript_lengths_jcvi) %>%
+    group_by(sample_id) %>%
+    mutate(tpm = tpm_one_col(counts, length)) %>%
+    ungroup() %>%
+    select(-counts, -length) %>%
+    pivot_wider(names_from=sample_id, values_from=tpm) 
+}
+tpm_jcvi = counts_jcvi %>% tpm_normalize()
 #downsampled_counts_jcvi = imap(counts_jcvi %>% select(all_of(samples_above_10m)), 
 #                              ~downsample_counts_col(.x, .y, 10e6))
-#downsampled_counts_jcvi = downsampled_counts_jcvi %>% purrr::reduce(full_join, by='genes')
+#downsampled_counts_jcvi = downsampled_counts_jcvi %>% purrr::reduce(full_join, by='gene_id')
 #downsampled_counts_jcvi[is.na(downsampled_counts_jcvi)] = 0
 #downsampled_counts_jcvi %>% write_csv(here('output/coexpression/downsampled_counts_jcvi.csv'))
 downsampled_counts_jcvi = read_csv(here('output/coexpression/downsampled_counts_jcvi.csv'))
@@ -69,6 +96,18 @@ genes_with_mean_tpm_above_1 = tpm_jcvi %>%
             num_samples_above_1 = sum(tpm > 1)) %>% 
   ungroup() %>%
   filter(tpm_mean >= 1)
+upper_quartile_normalize = function(df) {
+  df %>%
+    pivot_longer(-gene_id, names_to = 'sample_id', values_to='count') %>%
+    group_by(sample_id) %>%
+    filter(count > 0) %>% # get rid of genes that have 0 counts
+    mutate(uq = quantile(count, 0.75)) %>% 
+    ungroup() %>% 
+    mutate(uq_count = (count / uq)*1e6) %>%
+    select(-uq, -count) %>%
+    pivot_wider(names_from = sample_id, values_from = uq_count, values_fill = 0)
+}
+uq_jcvi = upper_quartile_normalize(counts_jcvi)
 downsample_uq_jcvi = downsampled_counts_jcvi %>%
   semi_join(genes_with_mean_tpm_above_1) %>%
   dplyr::select(all_of(c('gene_id', samples_above_10m))) %>%
@@ -94,7 +133,7 @@ tpm_jcvi %>%
   summarise(var = var(log1p(tpm)), 
             gene_id %in% genes_with_mean_tpm_above_1$gene_id) %>%  
   ungroup() %>%
-  mutate(var > quantile(var, 0.667))  %>% View()
+  mutate(var > quantile(var, 0.667))  %>% 
   ungroup() %>% 
   filter(var > quantile(var, 0.667))
 tpm_jcvi %>% select(gene_id, tpm=DRR452451) %>%
@@ -104,6 +143,7 @@ tpm_jcvi %>% select(gene_id, tpm=DRR452451) %>%
   coord_cartesian(xlim=c(0, 500), ylim=c(0, 25)) +
   geom_smooth() +
   theme_bw()
+
 ############## Gather inputs for constructing networks #############
 log_downsample_uq_jcvi= downsample_uq_jcvi %>%
   mutate(across(-gene_id, ~log2(.x + 1)))
@@ -113,6 +153,11 @@ downsample_vst_jcvi = DESeq2::vst(downsampled_counts_jcvi %>% column_to_rownames
                                     as.matrix(), blind=TRUE) %>%
   as.data.frame() %>% rownames_to_column('gene_id') %>% 
   semi_join(genes_with_mean_tpm_above_1)
+vst_jcvi = DESeq2::vst(counts_jcvi %>% column_to_rownames('gene_id') %>%
+                                    as.matrix(), blind=TRUE) %>%
+  as.data.frame() %>% rownames_to_column('gene_id') %>% 
+  semi_join(genes_with_mean_tpm_above_1)
+
 zscore_jcvi = tpm_jcvi %>%
   semi_join(genes_with_mean_tpm_above_1) %>%
   pivot_longer(-gene_id, names_to = 'sample_id', values_to = 'tpm') %>%
@@ -123,6 +168,16 @@ zscore_jcvi = tpm_jcvi %>%
   select(-log_tpm, -tpm) %>% 
   pivot_wider(names_from = 'sample_id', values_from = 'z_score') %>%
   dplyr::select(all_of(c('gene_id', samples_above_10m)))
+zscore_scale = function(df){
+  df %>%
+    pivot_longer(-gene_id, names_to = 'sample_id', values_to = 'tpm') %>%
+    mutate(log_tpm = log10(tpm + 1)) %>%
+    group_by(gene_id) %>%
+    mutate(z_score = (log_tpm - mean(log_tpm))/ sd(log_tpm)) %>%
+    ungroup() %>% 
+    select(-log_tpm, -tpm) %>% 
+    pivot_wider(names_from = 'sample_id', values_from = 'z_score')
+}
 downsample_tmm_jcvi = downsampled_counts_jcvi %>%
   dplyr::select(all_of(c('gene_id', samples_above_10m))) %>%
   column_to_rownames('gene_id') %>%
@@ -132,33 +187,46 @@ downsample_tmm_jcvi = cpm(downsample_tmm_jcvi, log=FALSE)
 downsample_tmm_jcvi = downsample_tmm_jcvi %>% as.data.frame() %>% rownames_to_column('gene_id') %>%
   semi_join(genes_with_mean_tpm_above_1) %>% column_to_rownames('gene_id')
 downsample_tmm_asinh_jcvi = downsample_tmm_jcvi %>% asinh() # hyperbolic arcsine recommended by Johnson, Kayla A., and Arjun Krishnan. "Robust normalization and transformation techniques for constructing gene coexpression networks from RNA-seq data." Genome biology 23 (2022): 1-26.
-tmm_jcvi = counts_jcvi %>%
-  dplyr::select(all_of(c('gene_id', samples_above_10m))) %>%
-  column_to_rownames('gene_id') %>%
-  DGEList()
-tmm_jcvi = calcNormFactors(tmm_jcvi, method = 'TMM') # Only changes norm.factors column
-log_tmm_jcvi = cpm(tmm_jcvi, log=TRUE) %>% as.data.frame() %>% rownames_to_column('gene_id') %>%
-  semi_join(genes_with_mean_tpm_above_1)
-tmm_jcvi = cpm(tmm_jcvi, log=FALSE) # Uses normalized library sizes
-tmm_jcvi = tmm_jcvi %>% as.data.frame() %>% rownames_to_column('gene_id') %>%
-  semi_join(genes_with_mean_tpm_above_1) %>% column_to_rownames('gene_id')
+tmm_normalize = function(df){
+  tmm = df %>%
+    column_to_rownames('gene_id') %>%
+    DGEList()
+  tmm = calcNormFactors(tmm, method = 'TMM') # Only changes norm.factors column
+  tmm = cpm(tmm, log=FALSE) %>% 
+    as.data.frame() %>%
+    rownames_to_column('gene_id') # Uses normalized library sizes
+  return(tmm)
+}
+tmm_jcvi = tmm_normalize(counts_jcvi)
 tmm_asinh_jcvi = tmm_jcvi %>% asinh()
-normalized_inputs = list('uq_downsamp' = downsample_uq_jcvi,
+metadata_network = metadata %>% filter(run %in% colnames(normalized_inputs$uq)) %>%
+  arrange(factor(run, levels = colnames(normalized_inputs$uq)))
+all(metadata_network$run == colnames(normalized_inputs$uq)[2:length(colnames(normalized_inputs$uq))])
+uq_log_corrected = ComBat(dat = normalized_inputs$uq %>% 
+                            mutate(across(-gene_id, ~log2(.x + 1))) %>%
+                            column_to_rownames('gene_id') %>% as.matrix(), 
+                          batch = metadata_network$bioproject) 
+
+normalized_inputs = list('uq' = uq_jcvi,
+                         'uq_downsamp' = downsample_uq_jcvi,
                          'uq_downsamp_log' = log_downsample_uq_jcvi,
                          'uq_downsamp_asinh' = asinh_downsample_uq_jcvi,
                          'vst_downsamp' = downsample_vst_jcvi,
                          'zscore' = zscore_jcvi,
                          'tmm' = tmm_jcvi %>% rownames_to_column('gene_id'),
-                         'tmm_asinh' = tmm_asinh_jcvi%>% rownames_to_column('gene_id'),
-                         'downsample_tmm' = tmm_jcvi%>% rownames_to_column('gene_id'),
-                         'downsample_tmm_asinh' = tmm_asinh_jcvi%>% rownames_to_column('gene_id'),
-                         'tmm_log' = log_tmm_jcvi)
+                         'tmm_asinh' = tmm_asinh_jcvi %>% rownames_to_column('gene_id'),
+                         'downsample_tmm' = downsample_tmm_jcvi %>% rownames_to_column('gene_id'),
+                         'downsample_tmm_asinh' = tmm_asinh_jcvi %>% rownames_to_column('gene_id'),
+                         'tmm_log' = log_tmm_jcvi,
+                         'uq_log_corrected' = uq_log_corrected %>% as.data.frame() %>% rownames_to_column('gene_id'))
 ################### Make networks ###############################
-cors = #normalized_inputs %>% 
+cors = normalized_inputs %>% 
   map(~.x %>% as.data.frame() %>% column_to_rownames('gene_id') %>% t() %>% cor())
-#cors[['uq_downsamp_log']] = normalized_inputs[['uq_downsamp_log']] %>% as.data.frame() %>% column_to_rownames('gene_id') %>% t() %>% cor()
+TOM = readRDS(here('output/coexpression/TOM'))
 
-n_samples = downsample_uq_jcvi_sub %>% ncol() - 1
+#cors[['uq_log_corrected']] = normalized_inputs[['uq_log_corrected']] %>% as.data.frame() %>% column_to_rownames('gene_id') %>% t() %>% cor()
+
+n_samples = downsample_tmm_jcvi %>% ncol() - 1
 cor2edges = function(cor_matrix, n_samples){
   cor_upper_tri = cor_matrix
   cor_upper_tri[lower.tri(cor_upper_tri)] = NA
@@ -176,9 +244,7 @@ cor2edges = function(cor_matrix, n_samples){
     mutate(FDR = p.adjust(p.value, method = "fdr")) 
 }
 edges = cors %>% map(~cor2edges(.x, n_samples))
-#edges[['uq_downsamp_log']] = cor2edges(cors[['uq_downsamp_log']], n_samples)
-saveRDS(edges, here('output/coexpression/edges.rds'))
-edges = readRDS(here('output/coexpression/edges.rds'))
+#edges[['uq_log_corrected']] = cor2edges(cors[['uq_log_corrected']], n_samples)
 AF_genes = c('AFLA_139150', 'AFLA_139160', 'AFLA_139170', 'AFLA_139180', 'AFLA_139190', 'AFLA_139200', 'AFLA_139210', 'AFLA_139220', 'AFLA_139230', 'AFLA_139240', 'AFLA_139250', 'AFLA_139260', 'AFLA_139270', 'AFLA_139280', 'AFLA_139290', 'AFLA_139300', 'AFLA_139310', 'AFLA_139320', 'AFLA_139330', 'AFLA_139340', 'AFLA_139360', 'AFLA_139370', 'AFLA_139380', 'AFLA_139390', 'AFLA_139400', 'AFLA_139410', 'AFLA_139420', 'AFLA_139430', 'AFLA_139440')
 quantiles = edges %>% map(~.x %>% mutate(abs_r = abs(r)) %>% pull(abs_r) %>% quantile(probs = 1:100 / 100))
 edges_filtered = edges %>% map(~.x %>% mutate(abs_r = abs(r)) %>% filter(abs_r > 0.5))
@@ -343,45 +409,45 @@ go_optimization_results %>%
   group_by(normalization_type, resolution) %>% 
   summarize(mean_frac_go_in_mod = mean(frac_genes_in_mod), median_frac_go_in_mod = median(frac_genes_in_mod)) %>% 
   arrange(desc(mean_frac_go_in_mod)) 
-#normalization_type resolution mean_frac_go_in_mod
-#<chr>              <chr>                    <dbl>
-# 1 downsample_tmm     3.75                     0.387
-#2 tmm                3.5                      0.387
-#3 downsample_tmm     3.25                     0.385
-#4 downsample_tmm     2.75                     0.385
-#5 downsample_tmm     3.5                      0.383
-#6 tmm                3.25                     0.382
-#7 downsample_tmm     2                        0.381
-#8 tmm                2.25                     0.380
-#9 tmm                3.75                     0.370
-#10 tmm                4                        0.370
+#normalization_type   resolution mean_frac_go_in_mod
+#<chr>                <chr>                    <dbl>
+#  1 tmm                  2                        0.383
+#2 downsample_tmm       2                        0.375
+#3 zscore               2                        0.366
+#4 tmm                  2.25                     0.357
+#5 downsample_tmm       2.25                     0.351
+#6 downsample_tmm_asinh 2                        0.349
+#7 tmm                  2.5                      0.348
+#8 uq_downsamp          2                        0.347
+#9 downsample_tmm       2.5                      0.347
+#10 tmm_asinh            2                        0.346
 bgc_optimization_results %>% 
   group_by(normalization_type, resolution) %>% 
   summarize(mean_frac_bgc_in_mod = mean(frac_genes_in_mod), median_frac_bgc_in_mod = median(frac_genes_in_mod)) %>% 
-  arrange(desc(mean_frac_bgc_in_mod))%>%  View()#print(n=15)
-#normalization_type resolution mean_frac_bgc_in_mod median_frac_bgc_in_mod
-#<chr>              <chr>                     <dbl>                  <dbl>
-#1 zscore             3                         0.498                  0.471
-#2 zscore             3.25                      0.488                  0.455
-#3 zscore             4                         0.486                  0.455
-#4 zscore             2.25                      0.484                  0.444
-#5 zscore             3.5                       0.484                  0.444
-#6 zscore             2.5                       0.482                  0.444
-#7 zscore             3.75                      0.482                  0.444
-#8 zscore             2.75                      0.481                  0.444
-#9 zscore             2                         0.478                  0.444
-#10 downsample_tmm     2.75                      0.468                  0.5  
-#11 downsample_tmm     3.25                      0.466                  0.5  
-#12 downsample_tmm     3.75                      0.466                  0.5  
-#13 tmm                3.5                       0.466                  0.5  
-#14 tmm                3.25                      0.465                  0.5  
-#15 tmm                2.75                      0.463                  0.5 
-# Downsampled TMM with a resolution of 2.75 scored the best overall for BGC and GO categories being in the same module
+  arrange(desc(mean_frac_bgc_in_mod))%>%  print(n=15)
+#normalization_type resolution mean_frac_bgc_in_mod
+#<chr>              <chr>                     <dbl>
+#  1 zscore             2                         0.490
+#2 zscore             2.25                      0.483
+#3 zscore             2.75                      0.481
+#4 zscore             2.5                       0.474
+#5 zscore             3                         0.465
+#6 vst_downsamp       2                         0.462
+#7 tmm                2                         0.461
+#8 uq_downsamp        2                         0.454
+#9 tmm                2.5                       0.452
+#10 zscore             3.75                      0.451
+#11 tmm                3                         0.451
+#12 zscore             3.5                       0.450
+#13 downsample_tmm     2.75                      0.448
+#14 downsample_tmm     2                         0.448
+#15 zscore             4                         0.447
+# TMM with a resolution of 2 scored the best overall for BGC and GO categories being in the same module
 # Zscore also scored very well for BGC. 
-modules = modules_resolutions$downsample_tmm$`2.75` # or modules_resolutions$zscore$`3` 
+modules = modules_resolutions$tmm$`2` # or modules_resolutions$zscore$`3` 
 saveRDS(modules, here('output/coexpression/modules.rds'))
 saveRDS(modules, here('shiny_app/data/modules.rds'))
-network = networks$downsample_tmm
+network = networks$tmm
 saveRDS(network, here('output/coexpression/network.rds'))
 saveRDS(network, here('shiny_app/data/network.rds'))
 random_optimization_results = modules_resolutions %>% 

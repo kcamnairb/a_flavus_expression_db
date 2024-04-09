@@ -204,5 +204,22 @@ sra_df = sra_df %>% left_join(doi)
 sra_df %>% write_csv(here('output/sra_metadata.csv'))
 ```
 
+```{r}
+sra_df = sra_df %>%
+  filter(str_detect(strain, 'fumigatus', negate = TRUE)) %>%
+  mutate(across(c(strain, sample_type,  source_name, genotype), 
+                              ~str_remove(.x, regex('^A.* flavus ', ignore_case = TRUE)))) %>%
+  mutate(across(c(strain, sample_type,  source_name, genotype, treatment, isolate), 
+                ~na_if(.x, 'missing'))) %>%
+  mutate(strain = str_replace(strain, 'NRRL3357|NR3357', 'NRRL 3357')) %>%
+  unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate,
+        sep = ';', na.rm =TRUE, remove = FALSE) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'missing'))) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'not collected'))) %>%
+  mutate(across(where(is.character), ~ na_if(.x, 'not applicable'))) %>%
+  select(where(~any(!is.na(.x))))
+sra_df %>% write_csv(here('output/sra_metadata.csv'))
+
+```
 
 

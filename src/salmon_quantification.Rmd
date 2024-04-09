@@ -30,33 +30,8 @@ counts_jcvi = list.files(here('output', 'salmon_quant', 'jcvi'), pattern='quant.
   purrr::reduce(full_join, by='gene_id')
 counts_jcvi = counts_jcvi %>% rename_with(~str_replace(., '.*/(.*?)/quant.sf', '\\1')) %>%
   mutate(across(-gene_id, round))
-
 counts_jcvi %>% write_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_jcvi_counts_unfiltered.csv'))
-counts_sums_jcvi = counts_jcvi %>% 
-  pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
-  group_by(run) %>%
-  summarize(total_counts = sum(counts)) 
-samples_to_keep = counts_sums_jcvi %>% 
-  filter(total_counts >= 1e6) %>%
-  pull(run)
-length(samples_to_keep)
-metadata = sra_df %>% 
-  filter(str_detect(strain, 'fumigatus', negate = TRUE)) %>%
-  filter(run %in% samples_to_keep)
-
-metadata = metadata %>%
-  mutate(across(c(strain, sample_type,  source_name, genotype), 
-                              ~str_remove(.x, regex('^A.* flavus ', ignore_case = TRUE)))) %>%
-  mutate(across(c(strain, sample_type,  source_name, genotype, treatment, isolate), 
-                ~na_if(.x, 'missing'))) %>%
-  mutate(strain = str_replace(strain, 'NRRL3357|NR3357', 'NRRL 3357')) %>%
-  unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate,
-        sep = ';', na.rm =TRUE, remove = FALSE) %>%
-  mutate(across(where(is.character), ~ na_if(.x, 'missing'))) %>%
-  mutate(across(where(is.character), ~ na_if(.x, 'not collected'))) %>%
-  mutate(across(where(is.character), ~ na_if(.x, 'not applicable'))) %>%
-  select(where(~any(!is.na(.x)))) 
-#sra_df
+metadata = read_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
 #metadata %>% 
 #  distinct(strain) %>% print.data.frame()
 #metadata_long = metadata %>% 
@@ -70,8 +45,6 @@ metadata %>%
     c_across(-c(bioproject:run, email, layout, selection, instrument, id, source_material_id)),
     '[:alpha:]{2,5}\\s*\\d{2,5}')) %>% 
   filter(!is.na(strain_extracted)) %>% View()
-
-metadata %>% write_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
 metadata_df = metadata %>% column_to_rownames('run')
 counts_jcvi = counts_jcvi %>% select(gene_id, all_of(metadata$run))
 counts_jcvi %>% write_csv(here('output/salmon_quant/jcvi_counts.csv'))

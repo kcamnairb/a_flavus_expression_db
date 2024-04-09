@@ -8,7 +8,7 @@
 set -x
 set -e
 set -u
-module load salmon/1.9.0
+module load salmon/1.10.0
 
 base=$(basename $1 | cut -d _ -f1 | cut -d . -f1)
 if (( $# == 1 )); then
