@@ -6,9 +6,6 @@ server = function(input, output, session) {
            'TPM chrom_level' = read_fst('data/A_flavus_chrom_level_tpm.fst') %>% as_tibble(),
            'VST JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
            'VST chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
-    #switch(input$normalization_method_barplot, 
-    #       'TPM' = read_fst('data/A_flavus_jcvi_tpm.fst') %>% as_tibble(),
-    #       'VST' = read_fst('data/vst_jcvi.fst') %>% as_tibble())
   })
   dataset_input_heatmap = reactive({
     switch(input$dataset_heatmap,
@@ -83,7 +80,11 @@ server = function(input, output, session) {
       df = df %>% 
         filter(gene_id %in% gene_ids_to_include) %>%
         select(all_of(c('gene_id', sra_runs_to_include)))
-      openxlsx::write.xlsx(df, file, firstRow = TRUE)
+      annotation_data = functional_annotation %>% 
+        filter(gene_id %in% gene_ids_to_include)
+      openxlsx::write.xlsx(list(df, annotation_data) %>% 
+                             setNames(c('VST', 'functional_annotation')), 
+                           file, firstRow = TRUE)
     }
   )
   output$download_entire_expression_dataset = downloadHandler(
@@ -168,7 +169,7 @@ server = function(input, output, session) {
           filter(!is.na(value))  
         gene_data = functional_annotation %>%
           filter(gene_id == gene) %>%
-          select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
+          select(all_of(c('gene_id', 'protein name', annotation_categories[1:5]))) %>%
           mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
                  `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
           pivot_longer(everything(), names_to='category', values_to='value') %>%
@@ -184,6 +185,24 @@ server = function(input, output, session) {
   }
  
   ### Co-expression network ###
+  add_network_annotation = function(network){
+    vertex_attr(network) = functional_annotation %>%
+      filter(gene_id %in% V(network)$name) %>%
+      mutate(gene_id = factor(gene_id, levels=V(network)$name)) %>%
+      arrange(gene_id) %>% 
+      rename(name=gene_id) %>%
+      full_join(tibble(name = V(network)$name))
+    edge_attr(network, 'abs_weight') = E(network)$weight %>% abs()
+    return(network)
+  }
+  network = reactive({
+    switch(input$dataset_network,
+           'JCVI' = read_rds('data/get_downsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+             add_network_annotation(),
+           'chrom_level' = read_rds('data/get_downsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+             add_network_annotation()
+           )
+  })
   create_network = function(gene_ids, network){
     ledges = data.frame(color = c('lightgray', 'hotpink'), 
                         label = c('positive correlation', 'negative correlation'), 
@@ -197,16 +216,16 @@ server = function(input, output, session) {
       node_neighbors = ego(network, order = 1, nodes = gene_ids)
       g = induced_subgraph(network, unlist(node_neighbors))
       ## Limit the number of edges to the top 50000.
-      edge_weight_cutoff = E(g)$abs_r %>% sort(decreasing = TRUE) %>% .[50000]
+      edge_weight_cutoff = E(g)$abs_weight %>% sort(decreasing = TRUE) %>% .[50000]
       ## Creating a new network with the minimum edge weight was a straightforward way to remove isolated nodes.
-      network2 = delete.edges(network, which(E(network)$abs_r < edge_weight_cutoff))
+      network2 = delete.edges(network, which(E(network)$abs_weight < edge_weight_cutoff))
       node_neighbors = ego(network2, order = 1, nodes = gene_ids)
       g = induced_subgraph(network2, unlist(node_neighbors))
       rv$displayed_nodes = unlist(node_neighbors) %>% names() %>% unique()
       V(g)$group = ifelse(V(g)$name %in% gene_ids, 'query_genes', 'neighbors')
       data = toVisNetworkData(g) 
-      print(table(data$edges$r > 0))
-      data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
+      print(table(data$edges$weight > 0))
+      data$edges['color'] = ifelse(data$edges$weight > 0, 'lightgray', 'hotpink')
       rv$network_data = data
       visNetwork(nodes = data$nodes, edges = data$edges) %>%
         visIgraphLayout(randomSeed=1234, type = "full", layout = 'layout_with_fr') %>%
@@ -219,7 +238,7 @@ server = function(input, output, session) {
       g = induced_subgraph(network, gene_ids)
       rv$displayed_nodes = gene_ids
       data = toVisNetworkData(g)
-      data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
+      data$edges['color'] = ifelse(data$edges$weight > 0, 'lightgray', 'hotpink')
       annotations = input$gene_categories_network %>% str_remove(' \\(\\d+? genes\\)')
       temp = data$nodes %>% select(id, group = !!sym(input$annotation_category_network)) %>% 
         separate_longer_delim(group, ';') %>% 
@@ -252,14 +271,14 @@ server = function(input, output, session) {
         # No gene list provided and show neighbors
         node_neighbors = ego(network, order = 1, nodes = gene_ids)
         g = induced_subgraph(network, unlist(node_neighbors))
-        edge_weight_cutoff = E(g)$abs_r %>% sort(decreasing = TRUE) %>% .[50000]
-        network2 = delete.edges(network, which(E(network)$abs_r < edge_weight_cutoff))
+        edge_weight_cutoff = E(g)$abs_weight %>% sort(decreasing = TRUE) %>% .[50000]
+        network2 = delete.edges(network, which(E(network)$abs_weight < edge_weight_cutoff))
         gene_ids = gene_ids[gene_ids %in% V(network2)$name]
         node_neighbors = ego(network2, order = 1, nodes = gene_ids)
         g = induced_subgraph(network2, unlist(node_neighbors))
         rv$displayed_nodes = unlist(node_neighbors) %>% names() %>% unique()
         data = toVisNetworkData(g)
-        data$edges['color'] = ifelse(data$edges$r > 0, 'lightgray', 'hotpink')
+        data$edges['color'] = ifelse(data$edges$weight > 0, 'lightgray', 'hotpink')
         annotations = input$gene_categories_network %>% str_remove(' \\(\\d+? genes\\)')
         temp = data$nodes %>% select(id, group = !!sym(input$annotation_category_network)) %>% 
           separate_longer_delim(group, ';') %>% 
@@ -283,7 +302,7 @@ server = function(input, output, session) {
                          filter(display_text %in% input$gene_categories_network) %>% 
                          pull(gene_id) %>% unlist() %>%
                          str_split(',') %>% unlist(), 
-                       network) %>%
+                       network()) %>%
           visEvents(click = "function(nodes){
                 Shiny.onInputChange('click', nodes.nodes[0]);
                 Shiny.onInputChange('node_selected', nodes.nodes.length);
@@ -303,9 +322,11 @@ server = function(input, output, session) {
     if (!is.null(input$node_selected) && (input$node_selected == 1)){
       gene_data = functional_annotation %>%
         filter(gene_id == input$click) %>%
-        select(all_of(c('gene_id', annotation_categories[1:5]))) %>%
-        mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
-               `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
+        select(any_of(c('gene_id','protein name','KEGG pathways','Gene Ontology','Interpro domains',
+                        'Subcellular localization','deeploc_score',
+                        'biosynthetic gene clusters','mibig_accession','mibig_compound'))) %>%
+        #mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
+        #       `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value)) 
       kable(gene_data, 'html', escape = FALSE, col.names = NULL) %>%
@@ -324,7 +345,7 @@ server = function(input, output, session) {
                                                     'Subcellular localization', 'Interpro domains'),
                                    functional_annotation %>% 
                                      filter(genome == input$dataset_network) %>%
-                                     filter(gene_id %in% V(network)$name)) %>% 
+                                     semi_join(network_genes, by='gene_id')) %>% 
         mutate(padjust = p.adjust(pval, method = 'fdr')) %>%
         filter(padjust < 0.05) %>% 
         select(-pval, -gene_list_name) %>%
@@ -339,8 +360,8 @@ server = function(input, output, session) {
     filename = 'network_data.xlsx',
     content = function(file){
       df = rv$network_data
-      df$edges = df$edges %>% select(from, to, r)
-      df$nodes = df$nodes %>% select(any_of(c('id','best blast hit','KEGG pathways','Gene Ontology','Interpro domains',
+      df$edges = df$edges %>% select(from, to, weight)
+      df$nodes = df$nodes %>% select(any_of(c('id','protein name','KEGG pathways','Gene Ontology','Interpro domains',
                                             'Subcellular localization','deeploc_score',
                                             'biosynthetic gene clusters','mibig_accession','mibig_compound')))
       openxlsx::write.xlsx(df, file, firstRow = TRUE)

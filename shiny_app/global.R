@@ -19,10 +19,10 @@ pdf(file = NULL)
 metadata = read_fst('data/sra_metadata_filtered.fst') %>% as_tibble()
 functional_annotation_jcvi = read_fst('data/functional_annotation_jcvi.fst') %>%
   as_tibble() %>%
-  dplyr::rename(gene_id = gene, `Gene Ontology` = `gene ontology`, `KEGG pathways` = `kegg pathways`, 
-         `biosynthetic gene clusters` = smurf_and_known_metabolite, 
-         `Subcellular localization` = deeploc_location, 
-         `Interpro domains` = `interpro domains`) %>%
+  dplyr::rename(gene_id = gene, `protein name` = `protein names`, `Gene Ontology` = `gene ontology`, 
+                `KEGG pathways` = `kegg pathways`, `biosynthetic gene clusters` = smurf_and_known_metabolite, 
+                `Subcellular localization` = deeploc_location, 
+                `Interpro domains` = `interpro domains`) %>%
   mutate(`Gene Ontology` = str_remove_all(`Gene Ontology`, "'de novo'"), 
          genome = 'JCVI') %>% 
   select(-c(`best blast hit`, hgtector_potential_donor, hgtector_silhouette_score))
@@ -32,8 +32,8 @@ functional_annotation_chrom_level = read_fst('data/functional_annotation_chrom_l
   mutate(`Gene Ontology (GO)`= str_remove_all(`Gene Ontology (GO)`, ' \\[GO:.*?\\]'),
          `Subcellular location [CC]` = str_remove(`Subcellular location [CC]`, 'SUBCELLULAR LOCATION: '), 
          genome = 'chrom_level') %>%
-  select(gene_id, `protein names` = `Protein names`, 
-         `Gene Ontology` = `Gene Ontology (GO)`, `biosynthetic gene clusters` = smurf_cluster, 
+  select(gene_id, `protein name` = `Protein names`, 
+         `Gene Ontology` = `Gene Ontology (GO)`, `biosynthetic gene clusters` = smurf_and_known_metabolite, 
          `KEGG pathways` = kegg_pathway,
          `Subcellular localization` = `Subcellular location [CC]`, `Interpro domains` = interpro, 
          SignalP:ApoplastP_probability, CAZyme, Cofactor, Pathway, genome)
@@ -75,14 +75,14 @@ mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00',
           '#f2b94f','#eff26e','#e43872','#d9b100','#9d7a00','#698cff','#d9d9d9','#00d27e','#d06800','#009f82','#c49200',
           '#cbe8ff','#fecddf','#c27eb6','#8cd2ce','#c4b8d9','#f883b0','#a49100','#f48800','#27d0df','#a04a9b')
 #AF_genes = c('AFLA_139150', 'AFLA_139160', 'AFLA_139170', 'AFLA_139180', 'AFLA_139190', 'AFLA_139200', 'AFLA_139210', 'AFLA_139220', 'AFLA_139230', 'AFLA_139240', 'AFLA_139250', 'AFLA_139260', 'AFLA_139270', 'AFLA_139280', 'AFLA_139290', 'AFLA_139300', 'AFLA_139310', 'AFLA_139320', 'AFLA_139330', 'AFLA_139340', 'AFLA_139360', 'AFLA_139370', 'AFLA_139380', 'AFLA_139390', 'AFLA_139400', 'AFLA_139410', 'AFLA_139420', 'AFLA_139430', 'AFLA_139440')
-network = readRDS('data/network.rds')
+network_genes = read_fst('data/gene_in_networks.fst')
 annotation_list_network = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
                             'Subcellular localization', 'Interpro domains') %>% purrr::set_names() %>% 
   map(~annotation_col_to_df(.x, annotation = functional_annotation %>% 
-                              filter(gene_id %in% V(network)$name)))
+                              semi_join(network_genes, by='gene_id')))
 annotation_list_network[['Gene list (Comma separated)']] = functional_annotation %>%
   select(gene_id, genome) %>%
-  filter(gene_id %in% V(network)$name) %>%
+  semi_join(network_genes, by='gene_id') %>%
   mutate(display_text = gene_id, column_to_select = gene_id) %>%
   rowwise() %>%
   mutate(gene_id = list(gene_id)) %>%

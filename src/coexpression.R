@@ -15,52 +15,13 @@ mpn65 = c('#ff0029','#377eb8','#66a61e','#984ea3','#00d2d5','#ff7f00','#af8d00',
           '#969696','#bdbdbd','#f43600','#4ba93b','#5779bb','#927acc','#97ee3f','#bf3947','#9f5b00','#f48758','#8caed6',
           '#f2b94f','#eff26e','#e43872','#d9b100','#9d7a00','#698cff','#d9d9d9','#00d27e','#d06800','#009f82','#c49200',
           '#cbe8ff','#fecddf','#c27eb6','#8cd2ce','#c4b8d9','#f883b0','#a49100','#f48800','#27d0df','#a04a9b')
-counts_jcvi = read_csv(here('output/star/jcvi_counts.csv'))
-counts_sums_jcvi = counts_jcvi %>% 
-  pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
-  group_by(run) %>%
-  summarize(total_counts = sum(counts)) 
 functional_annotation_jcvi = read_csv(here('shiny_app/data/functional_annotation_jcvi.csv')) %>%
   dplyr::rename(gene_id = gene, `Gene Ontology` = `gene ontology`, `KEGG pathways` = `kegg pathways`, 
                 `biosynthetic gene clusters` = smurf_and_known_metabolite, 
                 `Subcellular localization (DeepLoc)` = deeploc_location, 
                 `Interpro domains` = `interpro domains`) %>%
   mutate(`Gene Ontology` = str_remove_all(`Gene Ontology`, "'de novo'"))
-downsample_counts_col = function(counts_col, sample_name, sample_num){
-  genes_rep = counts_col %>% 
-    set_names(counts_jcvi$gene_id) %>%
-    imap(~rep(.y, .x)) %>% 
-    unlist() %>%
-    sample(sample_num)
-  tibble(gene_id = genes_rep) %>%
-    dplyr::count(gene_id, name = sample_name)
-}
-samples_above_10m  = counts_sums_jcvi %>% 
-  filter(total_counts >= 10e6) %>% pull(run)
 metadata = read_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
-#tpm_jcvi= read_csv(here('output', 'salmon_quant', 'jcvi', 'A_flavus_jcvi_tpm_unfiltered.csv'))
-#tpm_jcvi = tpm_jcvi %>%
-#  select(gene_id, all_of(metadata$run))
-transcript_lengths_jcvi = read_csv('Z:/genomes/af3357_annotation/af3357_cds_lengths.csv', 
-                                   col_names = c('gene_id', 'length'))
-tpm_normalize = function(df) {
-  tpm_one_col = function(counts, gene_length)(counts / gene_length) / (sum(counts / gene_length) / 10^6)
-  df %>%
-    pivot_longer(-gene_id, names_to='sample_id', values_to='counts') %>%
-    left_join(transcript_lengths_jcvi) %>%
-    group_by(sample_id) %>%
-    mutate(tpm = tpm_one_col(counts, length)) %>%
-    ungroup() %>%
-    select(-counts, -length) %>%
-    pivot_wider(names_from=sample_id, values_from=tpm) 
-}
-tpm_jcvi = counts_jcvi %>% tpm_normalize()
-#downsampled_counts_jcvi = imap(counts_jcvi %>% select(all_of(samples_above_10m)), 
-#                              ~downsample_counts_col(.x, .y, 10e6))
-#downsampled_counts_jcvi = downsampled_counts_jcvi %>% purrr::reduce(full_join, by='gene_id')
-#downsampled_counts_jcvi[is.na(downsampled_counts_jcvi)] = 0
-#downsampled_counts_jcvi %>% write_csv(here('output/coexpression/downsampled_counts_jcvi.csv'))
-downsampled_counts_jcvi = read_csv(here('output/coexpression/downsampled_counts_jcvi.csv'))
 downsampled_counts_jcvi %>%
   pivot_longer(-gene_id, names_to = 'sample_id', values_to='downsampled_count') %>%
   filter(sample_id == 'DRR452438') %>%
@@ -88,25 +49,6 @@ downsampled_counts_jcvi %>%
 # UQ + ComBat + Pearson performed the best in Vandenbon, A. (2022). Evaluation of critical data processing steps for reliable prediction of gene co-expression from large collections of RNA-seq data. Plos one, 17(1), e0263344.
 #https://bioinformatics.stackexchange.com/questions/2586/how-to-apply-upperquartile-normalization-on-rsem-expected-counts
 # UQ also recommended in this paper evaluating different normalization methods for coexpression analysis: Johnson, Kayla A., and Arjun Krishnan. "Robust normalization and transformation techniques for constructing gene coexpression networks from RNA-seq data." Genome biology 23 (2022): 1-26.
-genes_with_mean_tpm_above_1 = tpm_jcvi %>%
-  select(all_of(c('gene_id', samples_above_10m))) %>%
-  pivot_longer(-gene_id, names_to = 'sample_id', values_to='tpm') %>%
-  group_by(gene_id) %>%
-  summarize(tpm_mean = mean(tpm), tpm_sum = sum(tpm), tpm_max = max(tpm),
-            num_samples_above_1 = sum(tpm > 1)) %>% 
-  ungroup() %>%
-  filter(tpm_mean >= 1)
-upper_quartile_normalize = function(df) {
-  df %>%
-    pivot_longer(-gene_id, names_to = 'sample_id', values_to='count') %>%
-    group_by(sample_id) %>%
-    filter(count > 0) %>% # get rid of genes that have 0 counts
-    mutate(uq = quantile(count, 0.75)) %>% 
-    ungroup() %>% 
-    mutate(uq_count = (count / uq)*1e6) %>%
-    select(-uq, -count) %>%
-    pivot_wider(names_from = sample_id, values_from = uq_count, values_fill = 0)
-}
 uq_jcvi = upper_quartile_normalize(counts_jcvi)
 downsample_uq_jcvi = downsampled_counts_jcvi %>%
   semi_join(genes_with_mean_tpm_above_1) %>%
@@ -168,16 +110,6 @@ zscore_jcvi = tpm_jcvi %>%
   select(-log_tpm, -tpm) %>% 
   pivot_wider(names_from = 'sample_id', values_from = 'z_score') %>%
   dplyr::select(all_of(c('gene_id', samples_above_10m)))
-zscore_scale = function(df){
-  df %>%
-    pivot_longer(-gene_id, names_to = 'sample_id', values_to = 'tpm') %>%
-    mutate(log_tpm = log10(tpm + 1)) %>%
-    group_by(gene_id) %>%
-    mutate(z_score = (log_tpm - mean(log_tpm))/ sd(log_tpm)) %>%
-    ungroup() %>% 
-    select(-log_tpm, -tpm) %>% 
-    pivot_wider(names_from = 'sample_id', values_from = 'z_score')
-}
 downsample_tmm_jcvi = downsampled_counts_jcvi %>%
   dplyr::select(all_of(c('gene_id', samples_above_10m))) %>%
   column_to_rownames('gene_id') %>%
@@ -187,16 +119,7 @@ downsample_tmm_jcvi = cpm(downsample_tmm_jcvi, log=FALSE)
 downsample_tmm_jcvi = downsample_tmm_jcvi %>% as.data.frame() %>% rownames_to_column('gene_id') %>%
   semi_join(genes_with_mean_tpm_above_1) %>% column_to_rownames('gene_id')
 downsample_tmm_asinh_jcvi = downsample_tmm_jcvi %>% asinh() # hyperbolic arcsine recommended by Johnson, Kayla A., and Arjun Krishnan. "Robust normalization and transformation techniques for constructing gene coexpression networks from RNA-seq data." Genome biology 23 (2022): 1-26.
-tmm_normalize = function(df){
-  tmm = df %>%
-    column_to_rownames('gene_id') %>%
-    DGEList()
-  tmm = calcNormFactors(tmm, method = 'TMM') # Only changes norm.factors column
-  tmm = cpm(tmm, log=FALSE) %>% 
-    as.data.frame() %>%
-    rownames_to_column('gene_id') # Uses normalized library sizes
-  return(tmm)
-}
+
 tmm_jcvi = tmm_normalize(counts_jcvi)
 tmm_asinh_jcvi = tmm_jcvi %>% asinh()
 metadata_network = metadata %>% filter(run %in% colnames(normalized_inputs$uq)) %>%
