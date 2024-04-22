@@ -1,4 +1,5 @@
 server = function(input, output, session) {
+  rv = reactiveValues()
   ### Barplot ###
   dataset_input_barplot = reactive({
     switch(paste(input$normalization_method_barplot, input$dataset_barplot),
@@ -7,17 +8,6 @@ server = function(input, output, session) {
            'VST JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
            'VST chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
   })
-  dataset_input_heatmap = reactive({
-    switch(input$dataset_heatmap,
-           'JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
-           'chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
-  })
-  dataset_pca = reactive({
-    switch(input$dataset_pca,
-           'JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
-           'chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
-  })
-  rv = reactiveValues()
   single_gene_barplot = function(df, gene_of_interest){
     dataset_input_barplot() %>%
       filter(gene_id == gene_of_interest) %>%
@@ -34,7 +24,6 @@ server = function(input, output, session) {
       ggeasy::easy_remove_x_axis(what=c('tics', 'text', 'line')) +
       ggeasy::easy_center_title()
   }
-  
   output$barplot = renderPlotly({
     single_gene_barplot(dataset_input_barplot(), input$gene_id)
   }) 
@@ -67,6 +56,11 @@ server = function(input, output, session) {
       openxlsx::write.xlsx(df, file, firstRow = TRUE)
     })
   ### Multi-gene heatmap ###
+  dataset_input_heatmap = reactive({
+    switch(input$dataset_heatmap,
+           'JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
+           'chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
+  })
   output$download_multi_gene_data = downloadHandler(
     filename = 'A_flavus_VST.xlsx',
     content = function(file){
@@ -369,6 +363,11 @@ server = function(input, output, session) {
   )
 
   ### PCA ###
+  dataset_pca = reactive({
+    switch(input$dataset_pca,
+           'JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
+           'chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
+  })
   create_pca = function(){
     vsd = dataset_pca()
     gene_variance = matrixStats::rowVars(vsd %>% column_to_rownames('gene_id') %>% as.matrix())
@@ -416,15 +415,25 @@ server = function(input, output, session) {
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
   
   ### JBrowse ###
+  assembly_JCVI = assembly("http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.fa.gz", bgzip = TRUE)
+  assembly_chrom_level = assembly("http://127.0.0.1:5000/GCA_009017415.1_ASM901741v1_genomic.fa.gz", bgzip = TRUE)
+  
+  assembly = reactive({
+    switch(input$dataset_jbrowse,
+           'JCVI' = assembly_JCVI,
+           'chrom_level' = assembly_chrom_level
+    )
+  })
   output$jbrowse_output = renderJBrowseR(
     JBrowseR("View", 
-             assembly = assembly, 
-             tracks = tracks,
-             defaultSession = default_session,
-             theme = theme("#2596be", "#2596be", "#2596be", "#2596be"),
+             assembly = assembly(), 
+             #tracks = tracks,
+             #defaultSession = default_session,
+             theme = theme("#2596be", "#2596be", "#2596be", "#2596be")
              #text_index = text_index("http://127.0.0.1:5000/trix/Aspergillus_flavus.ix",
              #                        "http://127.0.0.1:5000/trix/Aspergillus_flavus.ixx",
              #                        "http://127.0.0.1:5000/trix/Aspergillus_flavus_meta.json",
              #                        "Aspergillus_flavus"),
-             location = "EQ963473:33515..37806"))
+             #location = "EQ963473:33515..37806"
+             ))
 }

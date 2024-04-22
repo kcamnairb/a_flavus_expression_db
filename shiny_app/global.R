@@ -87,11 +87,8 @@ annotation_list_network[['Gene list (Comma separated)']] = functional_annotation
   rowwise() %>%
   mutate(gene_id = list(gene_id)) %>%
   ungroup()
-#data_server = serve_data('data')
-#assembly = assembly(
-#  "http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.fa.gz",
-#  bgzip = TRUE
-#)
+data_server = serve_data('data')
+
 #annotations_track = track_feature(
 #  "http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.58_sorted_nosup.gff3.gz",
 #  assembly

@@ -136,20 +136,16 @@ ui = navbarPage(
            )
   ),
   tabPanel('JBrowse ',
-           #sidebarLayout(
-           #  sidebarPanel(
-           #    selectInput(inputId = 'dataset_pca',
-           #                label = 'Choose an assembly/annotation:',
-           #                choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)', 'GCA_009017415.1 (chromosome level)')),
-           #    selectInput(inputId = 'pc_x',
-           #                label = 'principal component to display',
-           #                choices = seq(1, 10),
-           #                selected = 1),
-           #    selectizeInput(inputId = 'category_to_color_pca', 
-           #                   label = 'Category to color samples by', 
-           #                   choices = c('bioproject', 'strain'))
-           #  ),
-           JBrowseROutput("jbrowse_output")
-  ),
+           sidebarLayout(
+            sidebarPanel(
+              selectInput(inputId = 'dataset_jbrowse',
+                          label = 'Choose an assembly/annotation:',
+                          choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                      'GCA_009017415.1 (chromosome level)' = 'chrom_level'))
+            ),
+            mainPanel(
+              JBrowseROutput("jbrowse_output")
+            )
+  )),
   theme = bs_theme(bootswatch = 'cerulean')
 )
