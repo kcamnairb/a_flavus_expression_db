@@ -11,6 +11,7 @@ require(visNetwork)
 library(openxlsx)
 library(JBrowseR)
 library(fst)
+library(ggeasy)
 library(tidyverse)
 source('bc3net_enrichment_modified.R')
 pdf(file = NULL)
@@ -45,7 +46,7 @@ annotation_col_to_df = function(column, annotation){
     filter(!is.na(column_to_select)) %>%
     separate_longer_delim(column_to_select, delim=';') %>%
     group_by(genome, column_to_select) %>%
-    summarise(gene_id = list(gene_id), num_genes = n()) %>%
+    summarise(gene_id = list(gene_id), num_genes = n(), .groups = 'drop_last') %>%
     mutate(display_text = str_glue('{column_to_select} ({num_genes} genes)') %>% as.character())
   if (column %in% c('Gene Ontology', 'KEGG pathways', 
                     'Subcellular localization', 'Interpro domains')) {
@@ -87,17 +88,8 @@ annotation_list_network[['Gene list (Comma separated)']] = functional_annotation
   rowwise() %>%
   mutate(gene_id = list(gene_id)) %>%
   ungroup()
-data_server = serve_data('data')
+#data_server = serve_data('data')
+#data_server$stop_server()
 
-#annotations_track = track_feature(
-#  "http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.58_sorted_nosup.gff3.gz",
-#  assembly
-#)
-#bw_track = track_wiggle("http://127.0.0.1:5000/test.bw", assembly)
-#tracks = tracks(annotations_track, bw_track)
-#default_session = default_session(
-#  assembly,
-#  c(annotations_track)
-#)
 
 

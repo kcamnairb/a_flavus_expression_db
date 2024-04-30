@@ -22,7 +22,7 @@ ui = navbarPage(
              ),
              mainPanel(
                plotlyOutput('barplot'),
-               dataTableOutput('sample_metadata_table')
+               DT::DTOutput('sample_metadata_table')
              )
            )
   ),
@@ -110,7 +110,7 @@ ui = navbarPage(
              mainPanel(
                visNetworkOutput("network_vis", height = '600px'),
                htmlOutput("node_data_from_network"),
-               dataTableOutput('enrichment_table')
+               DT::DTOutput('enrichment_table')
              )
            )
   ),
@@ -131,7 +131,7 @@ ui = navbarPage(
              ),
              mainPanel(
                plotlyOutput('pca'),
-               dataTableOutput('sample_metadata_table_pca')
+               DT::DTOutput('sample_metadata_table_pca')
              )
            )
   ),

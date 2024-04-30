@@ -33,7 +33,7 @@ server = function(input, output, session) {
                     value = ifelse(input$dataset_barplot == 'JCVI', 'AFLA_139360', 'F9C07_7811'))
   })
   # Create metadata table when bar in plot is clicked
-  output$sample_metadata_table = renderDataTable({
+  output$sample_metadata_table = DT::renderDT({
     click_data = event_data('plotly_click')
     validate(need(!is.null(click_data), 'Click on a bar to get further sample data'))
       metadata %>% filter(run == click_data$key) %>%
@@ -41,7 +41,7 @@ server = function(input, output, session) {
         mutate(across(everything(), as.character)) %>%
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value))  
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't'))
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't'), rownames = FALSE)
   ## Add a download button to download a table of the expression data
   output$download_single_gene_data = downloadHandler(
     filename = function() {
@@ -92,7 +92,6 @@ server = function(input, output, session) {
     }
   )
   multi_gene_heatmap = function(df, genes_of_interest, bioprojects_to_include){
-    #genes_of_interest = str_split_1(genes_of_interest, ' +|,+')
     df = df %>%
       filter(gene_id %in% genes_of_interest) %>%
       pivot_longer(-gene_id, names_to='sra_run', values_to='VST') %>%
@@ -163,9 +162,10 @@ server = function(input, output, session) {
           filter(!is.na(value))  
         gene_data = functional_annotation %>%
           filter(gene_id == gene) %>%
-          select(all_of(c('gene_id', 'protein name', annotation_categories[1:5]))) %>%
           mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
-                 `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
+                 `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE),
+                 `Ensemble Fungi` = if_else(genome == 'chrom_level', NA_character_, `Ensemble Fungi`)) %>%
+          select(all_of(c('gene_id', 'Ensemble Fungi', 'protein name', annotation_categories[1:5]))) %>%
           pivot_longer(everything(), names_to='category', values_to='value') %>%
           filter(!is.na(value)) %>%
           add_row(category = 'VST', value = as.character(round(VST, 2)))
@@ -185,7 +185,7 @@ server = function(input, output, session) {
       mutate(gene_id = factor(gene_id, levels=V(network)$name)) %>%
       arrange(gene_id) %>% 
       rename(name=gene_id) %>%
-      full_join(tibble(name = V(network)$name))
+      full_join(tibble(name = V(network)$name), by='name')
     edge_attr(network, 'abs_weight') = E(network)$weight %>% abs()
     return(network)
   }
@@ -316,11 +316,13 @@ server = function(input, output, session) {
     if (!is.null(input$node_selected) && (input$node_selected == 1)){
       gene_data = functional_annotation %>%
         filter(gene_id == input$click) %>%
-        select(any_of(c('gene_id','protein name','KEGG pathways','Gene Ontology','Interpro domains',
-                        'Subcellular localization','deeploc_score',
+        mutate(across(everything(), as.character)) %>%
+        mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
+               `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE),
+               `Ensemble Fungi` = if_else(genome == 'chrom_level', NA_character_, `Ensemble Fungi`)) %>%
+        select(any_of(c('gene_id','protein name',  'KEGG pathways','Gene Ontology','Interpro domains',
+                        'Subcellular localization','deeploc_score', 'Ensemble Fungi',
                         'biosynthetic gene clusters','mibig_accession','mibig_compound'))) %>%
-        #mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
-        #       `Ensemble Fungi` = cell_spec(gene_id, 'html', link = `Ensemble Fungi`, new_tab=TRUE)) %>%
         pivot_longer(everything(), names_to='category', values_to='value') %>%
         filter(!is.na(value)) 
       kable(gene_data, 'html', escape = FALSE, col.names = NULL) %>%
@@ -332,7 +334,7 @@ server = function(input, output, session) {
     }
   }
   observeEvent(input$perform_enrichment,{
-    output$enrichment_table = renderDataTable({
+    output$enrichment_table = DT::renderDT({
       validate(need(!is.null(input$gene_categories_network), message = FALSE))
       enrich_res = enrichment_test(gene_list = list('network' = rv$displayed_nodes),
                                    columns_list = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
@@ -348,7 +350,7 @@ server = function(input, output, session) {
         arrange(pvalue_adjusted)
       enrich_res
     }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't',
-                                      caption = 'Enrichment results:'))
+                                      caption = 'Enrichment results:'), rownames = FALSE)
   })
   output$download_network_data = downloadHandler(
     filename = 'network_data.xlsx',
@@ -398,13 +400,12 @@ server = function(input, output, session) {
       scale_fill_manual(values = mpn65) +
       ggeasy::easy_remove_legend()
   }
-  
   output$pca = renderPlotly({
     create_pca()
   }) %>%
     bindCache(input$dataset_pca, input$pc_x, input$category_to_color_pca)
   ## Create metadata table when a sample in the PCA plot is clicked
-  output$sample_metadata_table_pca = renderDataTable({
+  output$sample_metadata_table_pca = DT::renderDT({
     click_data_pca = event_data('plotly_click')
     validate(need(!is.null(click_data_pca), 'Click on a sample dot to get further sample data'))
     metadata %>% filter(run == click_data_pca$key) %>%
@@ -412,28 +413,64 @@ server = function(input, output, session) {
       mutate(across(everything(), as.character)) %>%
       pivot_longer(everything(), names_to='category', values_to='value') %>%
       filter(!is.na(value))  
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE))
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE), rownames= FALSE)
   
   ### JBrowse ###
-  assembly_JCVI = assembly("http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.fa.gz", bgzip = TRUE)
+  assembly_jcvi = assembly("http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.fa.gz", bgzip = TRUE)
+  annot_track_jcvi = track_feature("http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.58.gff3.gz",
+                                   assembly_jcvi) %>% 
+    str_replace('name\": \"Aspergillus_flavus\"', 'name\": \"genes\"')
   assembly_chrom_level = assembly("http://127.0.0.1:5000/GCA_009017415.1_ASM901741v1_genomic.fa.gz", bgzip = TRUE)
   
+  annot_track_chrom_level = track_feature("http://127.0.0.1:5000/GCA_009017415.1_ASM901741v1_genomic.gff.gz",
+                                          assembly_chrom_level) %>% 
+    str_replace('name\": \"GCA_009017415\"', 'name\": \"genes\"')
+  bw_track_jcvi = track_wiggle("http://127.0.0.1:5000/jcvi_mean_unstranded.bw", assembly_jcvi) %>% 
+    str_replace('name\": \"jcvi_mean_unstranded\"', 'name\": \"mean read coverage\"')
   assembly = reactive({
     switch(input$dataset_jbrowse,
-           'JCVI' = assembly_JCVI,
+           'JCVI' = assembly_jcvi,
            'chrom_level' = assembly_chrom_level
     )
   })
+  track_set = reactive({
+    switch(input$dataset_jbrowse,
+           'JCVI' = tracks(annot_track_jcvi, bw_track_jcvi),
+           'chrom_level' = tracks(annot_track_chrom_level)
+    )
+  })
+  default_session_jcvi = default_session(
+    assembly_jcvi,
+    c(annot_track_jcvi, bw_track_jcvi)
+  )
+  default_session_chrom_level = default_session(
+    assembly_chrom_level,
+    c(annot_track_chrom_level)
+  )
+  default_session = reactive({
+    switch(input$dataset_jbrowse,
+           'JCVI' = default_session_jcvi,
+           'chrom_level' = default_session_chrom_level
+    )
+  })
   output$jbrowse_output = renderJBrowseR(
-    JBrowseR("View", 
-             assembly = assembly(), 
-             #tracks = tracks,
-             #defaultSession = default_session,
-             theme = theme("#2596be", "#2596be", "#2596be", "#2596be")
-             #text_index = text_index("http://127.0.0.1:5000/trix/Aspergillus_flavus.ix",
-             #                        "http://127.0.0.1:5000/trix/Aspergillus_flavus.ixx",
-             #                        "http://127.0.0.1:5000/trix/Aspergillus_flavus_meta.json",
-             #                        "Aspergillus_flavus"),
-             #location = "EQ963473:33515..37806"
-             ))
+    JBrowseR(
+      "View",
+      assembly = assembly(),
+      tracks = track_set(),
+      theme = theme('#2596be', '#2596be', '#2596be', '#2596be'),
+      defaultSession = default_session(),
+      location = ifelse(input$dataset_jbrowse == "JCVI", 
+                        "EQ963478:2233141..2251880", "CP044620.1:5,082,369..5,101,183"),
+       text_index = ifelse(input$dataset_jbrowse == "JCVI",
+                           text_index("http://127.0.0.1:5000/trix/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.ix",
+                                      "http://127.0.0.1:5000/trix/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.ixx",
+                                      "http://127.0.0.1:5000/trix/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel_meta.json",
+                                      "Aspergillus_flavus"),
+                           text_index("http://127.0.0.1:5000/trix/GCA_009017415.1_ASM901741v1_genomic.ix",
+                                      "http://127.0.0.1:5000/trix/GCA_009017415.1_ASM901741v1_genomic.ixx",
+                                      "http://127.0.0.1:5000/trix/GCA_009017415.1_ASM901741v1_genomic_meta.json",
+                                      "GCA_009017415"))
+    )
+  )
 }
