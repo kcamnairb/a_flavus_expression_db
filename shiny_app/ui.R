@@ -67,7 +67,7 @@ ui = navbarPage(
              mainPanel(
                conditionalPanel(
                  condition = "input.generate_heatmap > 0",
-                 InteractiveComplexHeatmapOutput(title1 = "Full heatmap", layout = "1|(2-3)", width1=1000, height1=450, 
+                 InteractiveComplexHeatmapOutput(title1 = "Full heatmap", layout = "1|(2-3)", width1=900, height1=450, 
                                                action = 'click', output_ui = htmlOutput("gene_info"))
              ))
            )
@@ -102,7 +102,7 @@ ui = navbarPage(
                actionButton("generate_network", "Generate network"),
                br(),
                br(),
-               actionButton("perform_enrichment", "Perform functional term enrichment analysis of shown genes"),
+               actionButton("perform_enrichment", "Enrichment analysis"),
                br(),
                br(),
                downloadButton('download_network_data', label = 'Download network data for shown genes')
@@ -127,7 +127,7 @@ ui = navbarPage(
                            selected = 1),
                selectizeInput(inputId = 'category_to_color_pca', 
                               label = 'Category to color samples by', 
-                              choices = c('bioproject', 'strain'))
+                              choices = c('bioproject', 'strain', 'growth medium'))
              ),
              mainPanel(
                plotlyOutput('pca'),
@@ -147,5 +147,41 @@ ui = navbarPage(
               JBrowseROutput("jbrowse_output")
             )
   )),
+  tabPanel('About',
+           tags$p('This expression database was made using the Aspergillus flavus RNA-Seq datasets available on NCBI. 
+                  Details of the methods used to create the database and interface can be found at ', 
+                  tags$a('https://github.com/kcamnairb/flavus_sra_rnaseq', href = 'https://github.com/kcamnairb/flavus_sra_rnaseq', target='_blank'),
+                  '. Each tab has the option to see the data produced using reads mapped to two different genome assemblies of Aspergillus flavus NRRL 3357. 
+                  GCA_000006275.2 (JCVI-afl1-v2.0) is an older assembly submitted in 2009 that has been used the most frequently and most gene ids in the literature refer to this assembly. 
+                  GCA_009017415.1 is a chromosome-level assembly that was submitted in 2019.'),
+           tags$h5('Single gene barplot'),
+           tags$p('This tab allows you to query any single gene and see the expression values
+                  plotted using either TPM or VST normalization for all samples.
+                  The samples are colored by their bioproject and further details about the sample can be accessed by clicking on the bar for each sample.'),
+           tags$h5('Multiple gene heatmap'),
+           tags$p('This tab allows you create a heatmap from either a user provided list of gene ids that are comma separated, 
+                  for example "AFLA_023020,AFLA_023020...", or you can choose groups of genes by functional annotation using the dropdown menus.
+                  When the type of annotation is changed, the list of terms in the dropdown menu below it will be updated. 
+                  When multiple functional categories are selected, the category each gene belongs to is indicated by a different color on the left of the heatmap.
+                  To provide a comma separated list of gene ids, first select "Gene list (Comma separated)" in the type of annotation menu.
+                  The samples included in the heatmap can be selected by bioproject in the final dropdown menu. 
+                  When multiple bioprojects are selected, each bioproject will be shown in a separate group since there can be technical biases specific to each project.
+                  Once the genes and bioprojects are selected click "Generate heatmap" to produce the visualization.
+                  The expression values and functional data for the selected dataset or the entire dataset can be downloaded to an Excel file using the two buttons at the bottom left.
+                  '),
+           tags$h5('Co-expression network'),
+           tags$p('This tab allows you to see genes that are positively and negatively correlated with your genes of interest using the same dropdown menus as the heatmap tab to select the genes.
+                  After the subnetwork containing your genes of interest is displayed you can click on the "Enrichment analysis" button to look for functional
+                  terms that are enriched in the subnetwork using a hypergeometric test. Clicking on individual nodes in the network will show information about the corresponding gene.
+                  The edge weights for the subnetwork and functional annotation of the genes can be downloaded by clicking the button on the bottom left.'),
+           tags$h5('PCA'),
+           tags$p('This tab shows a principal component analysis of the samples using VST counts as input. 
+                  Additional principal components can be shown using the second drop down menu.
+                  The color of the samples defaults to the bioproject, but can also be changed to the strain or growth medium.'),
+           tags$h5('JBrowse'),
+           tags$p('This tab displays a genome browser showing an RNA-Seq track that is a mean of the coverage of all the samples.
+                  Entering your gene of interest in the search bar will navigate the browser to the locus of that gene.
+                  Looking at the coverage of a gene can allow you to evaluate the accuracy of a gene prediction.')
+  ),
   theme = bs_theme(bootswatch = 'cerulean')
 )

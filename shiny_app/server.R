@@ -367,21 +367,16 @@ server = function(input, output, session) {
   ### PCA ###
   dataset_pca = reactive({
     switch(input$dataset_pca,
-           'JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
-           'chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
+           'JCVI' = read_rds('data/pca_jcvi.rds'),
+           'chrom_level' = read_rds('data/pca_chrom_level.rds'))
   })
   create_pca = function(){
-    vsd = dataset_pca()
-    gene_variance = matrixStats::rowVars(vsd %>% column_to_rownames('gene_id') %>% as.matrix())
-    # select the top 4,000 genes by variance
-    most_variable_genes = order(gene_variance, decreasing=TRUE)[1:4000]
-    pca = prcomp(t((vsd %>% column_to_rownames('gene_id') %>% as.matrix())))
-    # the contribution to the total variance for each component
+    pca = dataset_pca()
     percent_var = pca$sdev^2 / sum(pca$sdev^2) 
     percent_var = round(100 * percent_var, 2)
     # assemble data for biplot
-    pca_scores = pca$x[,1:10] %>% as_tibble() %>% 
-      bind_cols(run = names(vsd)[2:length(vsd)]) %>%
+    pca_scores = pca$x[,1:10] %>% as.data.frame() %>% 
+      rownames_to_column('run') %>%
       left_join(metadata, by='run')
     pca_scores %>%
       mutate(across(c(strain, sample_type,  source_name, genotype), 
@@ -402,8 +397,7 @@ server = function(input, output, session) {
   }
   output$pca = renderPlotly({
     create_pca()
-  }) %>%
-    bindCache(input$dataset_pca, input$pc_x, input$category_to_color_pca)
+  })
   ## Create metadata table when a sample in the PCA plot is clicked
   output$sample_metadata_table_pca = DT::renderDT({
     click_data_pca = event_data('plotly_click')
@@ -416,17 +410,18 @@ server = function(input, output, session) {
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE), rownames= FALSE)
   
   ### JBrowse ###
-  assembly_jcvi = assembly("http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.fa.gz", bgzip = TRUE)
-  annot_track_jcvi = track_feature("http://127.0.0.1:5000/Aspergillus_flavus.JCVI-afl1-v2.0.58.gff3.gz",
+  assembly_jcvi = assembly("http://127.0.0.1:5000/jcvi.fa.gz", bgzip = TRUE)
+  annot_track_jcvi = track_feature("http://127.0.0.1:5000/jcvi.gff.gz",
                                    assembly_jcvi) %>% 
     str_replace('name\": \"Aspergillus_flavus\"', 'name\": \"genes\"')
-  assembly_chrom_level = assembly("http://127.0.0.1:5000/GCA_009017415.1_ASM901741v1_genomic.fa.gz", bgzip = TRUE)
-  
-  annot_track_chrom_level = track_feature("http://127.0.0.1:5000/GCA_009017415.1_ASM901741v1_genomic.gff.gz",
+  assembly_chrom_level = assembly("http://127.0.0.1:5000/chrom_level.fa.gz", bgzip = TRUE)
+  annot_track_chrom_level = track_feature("http://127.0.0.1:5000/chrom_level.gff.gz",
                                           assembly_chrom_level) %>% 
     str_replace('name\": \"GCA_009017415\"', 'name\": \"genes\"')
   bw_track_jcvi = track_wiggle("http://127.0.0.1:5000/jcvi_mean_unstranded.bw", assembly_jcvi) %>% 
     str_replace('name\": \"jcvi_mean_unstranded\"', 'name\": \"mean read coverage\"')
+  bw_track_chrom_level = track_wiggle("http://127.0.0.1:5000/chrom_level_mean_unstranded.bw", assembly_chrom_level) %>% 
+    str_replace('name\": \"chrom_level_mean_unstranded\"', 'name\": \"mean read coverage\"')
   assembly = reactive({
     switch(input$dataset_jbrowse,
            'JCVI' = assembly_jcvi,
@@ -436,7 +431,7 @@ server = function(input, output, session) {
   track_set = reactive({
     switch(input$dataset_jbrowse,
            'JCVI' = tracks(annot_track_jcvi, bw_track_jcvi),
-           'chrom_level' = tracks(annot_track_chrom_level)
+           'chrom_level' = tracks(annot_track_chrom_level, bw_track_chrom_level)
     )
   })
   default_session_jcvi = default_session(
@@ -445,7 +440,7 @@ server = function(input, output, session) {
   )
   default_session_chrom_level = default_session(
     assembly_chrom_level,
-    c(annot_track_chrom_level)
+    c(annot_track_chrom_level, bw_track_chrom_level)
   )
   default_session = reactive({
     switch(input$dataset_jbrowse,
@@ -463,14 +458,14 @@ server = function(input, output, session) {
       location = ifelse(input$dataset_jbrowse == "JCVI", 
                         "EQ963478:2233141..2251880", "CP044620.1:5,082,369..5,101,183"),
        text_index = ifelse(input$dataset_jbrowse == "JCVI",
-                           text_index("http://127.0.0.1:5000/trix/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.ix",
-                                      "http://127.0.0.1:5000/trix/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel.ixx",
-                                      "http://127.0.0.1:5000/trix/Aspergillus_flavus.JCVI-afl1-v2.0.dna.toplevel_meta.json",
-                                      "Aspergillus_flavus"),
-                           text_index("http://127.0.0.1:5000/trix/GCA_009017415.1_ASM901741v1_genomic.ix",
-                                      "http://127.0.0.1:5000/trix/GCA_009017415.1_ASM901741v1_genomic.ixx",
-                                      "http://127.0.0.1:5000/trix/GCA_009017415.1_ASM901741v1_genomic_meta.json",
-                                      "GCA_009017415"))
+                           text_index("http://127.0.0.1:5000/trix/jcvi.ix",
+                                      "http://127.0.0.1:5000/trix/jcvi.ixx",
+                                      "http://127.0.0.1:5000/trix/jcvi_meta.json",
+                                      "jcvi"),
+                           text_index("http://127.0.0.1:5000/trix/chrom_level.ix",
+                                      "http://127.0.0.1:5000/trix/chrom_level.ixx",
+                                      "http://127.0.0.1:5000/trix/chrom_level_meta.json",
+                                      "chrom_level"))
     )
   )
 }

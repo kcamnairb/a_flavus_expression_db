@@ -16,8 +16,7 @@ library(tidyverse)
 source('bc3net_enrichment_modified.R')
 pdf(file = NULL)
 #setwd('shiny_app')
-#shinyOptions(cache = cachem::cache_disk('cache'))
-metadata = read_fst('data/sra_metadata_filtered.fst') %>% as_tibble()
+metadata = read_fst('data/sra_metadata_filtered_hand_edited.fst') %>% as_tibble()
 functional_annotation_jcvi = read_fst('data/functional_annotation_jcvi.fst') %>%
   as_tibble() %>%
   dplyr::rename(gene_id = gene, `protein name` = `protein names`, `Gene Ontology` = `gene ontology`, 
@@ -88,7 +87,7 @@ annotation_list_network[['Gene list (Comma separated)']] = functional_annotation
   rowwise() %>%
   mutate(gene_id = list(gene_id)) %>%
   ungroup()
-#data_server = serve_data('data')
+data_server = serve_data('data')
 #data_server$stop_server()
 
 
