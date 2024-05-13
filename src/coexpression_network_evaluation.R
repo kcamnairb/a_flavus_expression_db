@@ -112,19 +112,20 @@ p_total_genes_from_same_term = enrich_accuracy %>%
   theme_bw() +
   ggeasy::easy_remove_legend() +
   ggeasy::easy_remove_y_axis(what = c('title', 'text')) +
-  ggtitle('Total number of genes from from same term among top 100 edges for each gene') +
+  ggtitle('Total number of genes from same term among top 100 edges for each gene') +
   ggeasy::easy_center_title() 
 df_total_genes_from_same_term = enrich_accuracy %>% 
   filter(n_genes_subnetwork >= 4) %>%
   group_by(annotation_category, network_method) %>%
   summarize(n_genes_from_same_term_total = sum(n_genes_subnetwork)) %>%
   mutate(network_method = fct_reorder(network_method, n_genes_from_same_term_total)) %>%
+  ungroup() %>%
   distinct(network_method) %>% 
   make_tabular_workflow() %>%
   arrange(desc(network_method)) 
 tbl_theme = ttheme_minimal(base_size = 6.8, base_colour = "black", base_family = "",
                            parse = FALSE, padding = unit(c(.90, .90), "mm"))
-tbl_grob = gridExtra::tableGrob(df_accuracy %>% select(-network_method), theme= tbl_theme, rows = NULL)
+tbl_grob = gridExtra::tableGrob(df_total_genes_from_same_term %>% select(-network_method), theme= tbl_theme, rows = NULL)
 p = gridExtra::grid.arrange(tbl_grob, p_total_genes_from_same_term, ncol = 2, widths = c(2.5/10, 7.5/10))
 ggsave(here('output/coexpression/enrichment_accuracy_total_genes.png'), p, width = 14, height = 8, units='in', dpi = 300)
 enrich_accuracy %>% 

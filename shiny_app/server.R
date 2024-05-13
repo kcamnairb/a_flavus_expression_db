@@ -191,9 +191,9 @@ server = function(input, output, session) {
   }
   network = reactive({
     switch(input$dataset_network,
-           'JCVI' = read_rds('data/get_downsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+           'JCVI' = read_rds('data/get_nondownsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
              add_network_annotation(),
-           'chrom_level' = read_rds('data/get_downsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+           'chrom_level' = read_rds('data/get_nondownsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
              add_network_annotation()
            )
   })
@@ -410,17 +410,18 @@ server = function(input, output, session) {
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE), rownames= FALSE)
   
   ### JBrowse ###
-  assembly_jcvi = assembly("http://127.0.0.1:5000/jcvi.fa.gz", bgzip = TRUE)
-  annot_track_jcvi = track_feature("http://127.0.0.1:5000/jcvi.gff.gz",
+  assembly_jcvi = assembly(paste0(jbrowse_resources_base, "jcvi.fa.gz"), bgzip = TRUE)
+  annot_track_jcvi = track_feature(paste0(jbrowse_resources_base, "jcvi.gff.gz"),
                                    assembly_jcvi) %>% 
-    str_replace('name\": \"Aspergillus_flavus\"', 'name\": \"genes\"')
-  assembly_chrom_level = assembly("http://127.0.0.1:5000/chrom_level.fa.gz", bgzip = TRUE)
-  annot_track_chrom_level = track_feature("http://127.0.0.1:5000/chrom_level.gff.gz",
+    str_replace('name\": \"jcvi\"', 'name\": \"genes\"')
+  assembly_chrom_level = assembly(paste0(jbrowse_resources_base, "chrom_level.fa.gz"), bgzip = TRUE)
+  annot_track_chrom_level = track_feature(paste0(jbrowse_resources_base, "chrom_level.gff.gz"),
                                           assembly_chrom_level) %>% 
-    str_replace('name\": \"GCA_009017415\"', 'name\": \"genes\"')
-  bw_track_jcvi = track_wiggle("http://127.0.0.1:5000/jcvi_mean_unstranded.bw", assembly_jcvi) %>% 
+    str_replace('name\": \"chrom_level\"', 'name\": \"genes\"')
+  bw_track_jcvi = track_wiggle(paste0(jbrowse_resources_base, "jcvi_mean_unstranded.bw"), assembly_jcvi) %>% 
     str_replace('name\": \"jcvi_mean_unstranded\"', 'name\": \"mean read coverage\"')
-  bw_track_chrom_level = track_wiggle("http://127.0.0.1:5000/chrom_level_mean_unstranded.bw", assembly_chrom_level) %>% 
+  bw_track_chrom_level = track_wiggle(paste0(jbrowse_resources_base, "chrom_level_mean_unstranded.bw"), 
+                                      assembly_chrom_level) %>% 
     str_replace('name\": \"chrom_level_mean_unstranded\"', 'name\": \"mean read coverage\"')
   assembly = reactive({
     switch(input$dataset_jbrowse,
@@ -458,13 +459,13 @@ server = function(input, output, session) {
       location = ifelse(input$dataset_jbrowse == "JCVI", 
                         "EQ963478:2233141..2251880", "CP044620.1:5,082,369..5,101,183"),
        text_index = ifelse(input$dataset_jbrowse == "JCVI",
-                           text_index("http://127.0.0.1:5000/trix/jcvi.ix",
-                                      "http://127.0.0.1:5000/trix/jcvi.ixx",
-                                      "http://127.0.0.1:5000/trix/jcvi_meta.json",
+                           text_index(paste0(jbrowse_resources_base, "trix/jcvi.ix"),
+                                      paste0(jbrowse_resources_base, "trix/jcvi.ixx"),
+                                      paste0(jbrowse_resources_base, "trix/jcvi_meta.json"),
                                       "jcvi"),
-                           text_index("http://127.0.0.1:5000/trix/chrom_level.ix",
-                                      "http://127.0.0.1:5000/trix/chrom_level.ixx",
-                                      "http://127.0.0.1:5000/trix/chrom_level_meta.json",
+                           text_index(paste0(jbrowse_resources_base, "trix/chrom_level.ix"),
+                                      paste0(jbrowse_resources_base, "trix/chrom_level.ixx"),
+                                      paste0(jbrowse_resources_base, "trix/chrom_level_meta.json"),
                                       "chrom_level"))
     )
   )

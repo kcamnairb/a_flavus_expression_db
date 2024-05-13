@@ -87,7 +87,12 @@ annotation_list_network[['Gene list (Comma separated)']] = functional_annotation
   rowwise() %>%
   mutate(gene_id = list(gene_id)) %>%
   ungroup()
-data_server = serve_data('data')
+## Use local storage for JBrowse if running from host within ARS to reduce Google billing costs
+jbrowse_resources_base = ifelse(str_starts(Sys.info()['nodename'], regex('ars', ignore_case = TRUE)),
+                                'http://10.114.143.20/data/',
+                                'https://storage.googleapis.com/flavus_jbrowse/'
+                                )
+#data_server = serve_data('data')
 #data_server$stop_server()
 
 
