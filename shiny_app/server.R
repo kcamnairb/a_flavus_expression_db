@@ -393,7 +393,8 @@ server = function(input, output, session) {
       ylab(paste0("PC", as.numeric(input$pc_x) + 1, ": ",percent_var[as.numeric(input$pc_x) + 1],"% variance")) +
       theme_bw() +
       scale_fill_manual(values = mpn65) +
-      ggeasy::easy_remove_legend()
+      ggeasy::easy_remove_legend() +
+      ggeasy::easy_text_size(size = 16)
   }
   output$pca = renderPlotly({
     create_pca()

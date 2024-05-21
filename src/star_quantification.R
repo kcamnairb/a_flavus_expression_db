@@ -42,29 +42,14 @@ counts_star_jcvi = counts_star_jcvi %>%
   reduce(full_join)
 counts_star_jcvi = counts_star_jcvi %>% 
   filter(!str_detect(gene_id, 'tRNA'))
-
 counts_sums_jcvi = counts_star_jcvi %>% 
   pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
   group_by(run) %>%
   summarize(total_counts = sum(counts)) 
-qc = read_tsv(here('output/picard/multiqc_data/multiqc_picard_RnaSeqMetrics.txt')) %>% 
-  janitor::clean_names() %>%
-  rename(run = sample)
-count_strand_totals[,4:7] %>% 
-  left_join(qc %>% select(run, pct_mrna_bases:median_5prime_to_3prime_bias), by='run') %>% 
-  left_join(counts_sums_jcvi, by='run') %>%
-  filter(run != 'SRR8526599') %>%
-  pivot_longer(cols = pct_mrna_bases:total_counts, 
-               names_to = 'metric', values_to='value') %>%
-  mutate(run = fct_reorder(run, frac_strand2)) %>%
-  ggplot(aes(run, value, fill = strand_specificity)) +
-  geom_col() +
-  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
-  facet_wrap(~metric, scales = 'free_y')
-ggsave(here('output/picard/picard_qc.png'), unit='in', width = 12, height=8, dpi = 300)
-qc %>% count(pct_mrna_bases > 30)
+low_coding_samples = read_lines(here('output/picard/low_coding_samples.txt'))
 samples_to_keep = counts_sums_jcvi %>% 
-  filter(total_counts >= 1e6) %>%
+  filter(total_counts >= 1e6, 
+         !run %in% low_coding_samples) %>%
   pull(run)
 length(samples_to_keep)
 counts_star_jcvi  = counts_star_jcvi %>% select(all_of(c('gene_id', samples_to_keep)))
@@ -194,7 +179,8 @@ tpm_normalize = function(df, transcript_lengths_df) {
     select(-counts, -length) %>%
     pivot_wider(names_from=sample_id, values_from=tpm) 
 }
-tpm_jcvi = counts_star_jcvi %>% tpm_normalize(transcript_lengths_jcvi)
+
+ = counts_star_jcvi %>% tpm_normalize(transcript_lengths_jcvi)
 tpm_jcvi %>% write_csv(here('shiny_app/data/A_flavus_jcvi_tpm.csv'))
 transcript_lengths_chrom_level = read_csv(
   'Z:/genomes/A_flavus_3357_chromosome_level_JGI/download_from_ncbi/transcript_lengths.csv')
