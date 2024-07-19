@@ -47,9 +47,11 @@ counts_sums_jcvi = counts_star_jcvi %>%
   group_by(run) %>%
   summarize(total_counts = sum(counts)) 
 low_coding_samples = read_lines(here('output/picard/low_coding_samples.txt'))
+q30_below_75 = read_lines(here('output/fastp_reports/q30_below_75_samples.txt'))
 samples_to_keep = counts_sums_jcvi %>% 
   filter(total_counts >= 1e6, 
-         !run %in% low_coding_samples) %>%
+         !run %in% low_coding_samples,
+         !run %in% q30_below_75) %>%
   pull(run)
 length(samples_to_keep)
 counts_star_jcvi  = counts_star_jcvi %>% select(all_of(c('gene_id', samples_to_keep)))
@@ -180,7 +182,7 @@ tpm_normalize = function(df, transcript_lengths_df) {
     pivot_wider(names_from=sample_id, values_from=tpm) 
 }
 
- = counts_star_jcvi %>% tpm_normalize(transcript_lengths_jcvi)
+tpm_jcvi = counts_star_jcvi %>% tpm_normalize(transcript_lengths_jcvi)
 tpm_jcvi %>% write_csv(here('shiny_app/data/A_flavus_jcvi_tpm.csv'))
 transcript_lengths_chrom_level = read_csv(
   'Z:/genomes/A_flavus_3357_chromosome_level_JGI/download_from_ncbi/transcript_lengths.csv')

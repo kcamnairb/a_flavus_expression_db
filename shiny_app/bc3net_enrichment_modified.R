@@ -56,12 +56,3 @@ enrichment_test = function(gene_list, functional_annotation, columns_list){
     imap(gene_list, ~combine_gene_list_with_columns(.x, .y)) %>%
     flatten_dfr()
 }
-
-#functional_annotation_test = read_csv('Z://genomes/af3357_annotation/Af3357_functional_annotation_4.csv', na='') %>%
-#  rename(gene_id = gene)
-#test_gene_set = list('test_set' = functional_annotation_test %>% 
-#                       filter(smurf_and_known_metabolite == 'smurf_cluster_54-Aflatoxin' |
-#                                `Apoplast-p` == 'Apoplastic') %>% pull(gene_id))
-#test = enrichment_test(test_gene_set, functional_annotation_test,
-#                c('smurf_and_known_metabolite'))
-#str(test)

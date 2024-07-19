@@ -33,7 +33,7 @@ downsample_counts_col = function(counts_col, sample_name, gene_ids, sample_num){
 }
 samples_above_10m  = counts_sums_jcvi %>% 
   filter(total_counts >= 10e6) %>% pull(run)
-
+length(samples_above_10m)
 transcript_lengths_jcvi = read_csv('Z:/genomes/af3357_annotation/af3357_cds_lengths.csv', 
                                    col_names = c('gene_id', 'length'))
 tpm_normalize = function(df, transcript_lengths_df = transcript_lengths_jcvi) {
@@ -224,7 +224,7 @@ method_combinations = expand_grid(downsampling = c('get_nondownsampled_data', 'g
   mutate(res = list(get(downsampling)() %>% 
                       get(batch_correction)() %>% 
                       get(library_size_normalization)() %>% 
-                      get(scaling)())) %>% 
+                      get(scaling)())) %>%
   rowwise() %>%
   mutate(genes_filtered = list(res %>% semi_join(genes_with_mean_tpm_above_1)),
          cors = list(genes_filtered %>% get(correlation)())) %>% 

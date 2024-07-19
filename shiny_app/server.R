@@ -25,6 +25,8 @@ server = function(input, output, session) {
       ggeasy::easy_center_title()
   }
   output$barplot = renderPlotly({
+    validate(need(input$gene_id, 'Enter a gene id'))
+    validate(need(input$gene_id %in% dataset_input_barplot()$gene_id, 'Gene ID not in dataset'))
     single_gene_barplot(dataset_input_barplot(), input$gene_id)
   }) 
   # Change default gene_id value if the dataset changes
@@ -129,6 +131,8 @@ server = function(input, output, session) {
     return(ht)
   }
   observeEvent(input$generate_heatmap,{
+    validate(need(length(input$gene_categories) > 0, 'Select at least one gene'),
+             need(length(input$bioprojects_to_include) > 0, 'Select at least one bioproject'))
     makeInteractiveComplexHeatmap(
       input, output, session,
       ht_list = multi_gene_heatmap(dataset_input_heatmap(), 
@@ -393,8 +397,7 @@ server = function(input, output, session) {
       ylab(paste0("PC", as.numeric(input$pc_x) + 1, ": ",percent_var[as.numeric(input$pc_x) + 1],"% variance")) +
       theme_bw() +
       scale_fill_manual(values = mpn65) +
-      ggeasy::easy_remove_legend() +
-      ggeasy::easy_text_size(size = 16)
+      ggeasy::easy_remove_legend() 
   }
   output$pca = renderPlotly({
     create_pca()
