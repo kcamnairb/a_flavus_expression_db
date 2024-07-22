@@ -83,6 +83,10 @@ server = function(input, output, session) {
                            file, firstRow = TRUE)
     }
   )
+  observe({
+    toggleState(id = "download_multi_gene_data", 
+                condition = length(input$gene_categories) > 0 & length(input$bioprojects_to_include) > 0)
+  })
   output$download_entire_expression_dataset = downloadHandler(
     filename = 'A_flavus_VST_entire_dataset.xlsx',
     content = function(file){
@@ -130,6 +134,10 @@ server = function(input, output, session) {
     ht = draw(ht)
     return(ht)
   }
+  observe({
+    toggleState(id = "generate_heatmap", 
+                condition = length(input$gene_categories) > 0 & length(input$bioprojects_to_include) > 0)
+  })
   observeEvent(input$generate_heatmap,{
     validate(need(length(input$gene_categories) > 0, 'Select at least one gene'),
              need(length(input$bioprojects_to_include) > 0, 'Select at least one bioproject'))
@@ -309,6 +317,10 @@ server = function(input, output, session) {
         })
       })
   observe({
+    toggleState(id = "generate_network", 
+                condition = length(input$gene_categories_network) > 0)
+  })
+  observe({
       updateSelectInput(session, "gene_categories_network",
                         choices = annotation_list_network[[input$annotation_category_network]] %>% 
                           filter(genome == input$dataset_network) %>%
@@ -356,6 +368,10 @@ server = function(input, output, session) {
     }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't',
                                       caption = 'Enrichment results:'), rownames = FALSE)
   })
+  observe({
+    toggleState(id = "perform_enrichment", 
+                condition = (length(input$gene_categories_network) > 0 && length(rv$network_data) > 0)
+                )})
   output$download_network_data = downloadHandler(
     filename = 'network_data.xlsx',
     content = function(file){
@@ -367,7 +383,10 @@ server = function(input, output, session) {
       openxlsx::write.xlsx(df, file, firstRow = TRUE)
     }
   )
-
+  observe({
+    toggleState(id = "download_network_data", 
+                condition = (length(input$gene_categories_network) > 0  && length(rv$network_data) > 0)
+    )})
   ### PCA ###
   dataset_pca = reactive({
     switch(input$dataset_pca,

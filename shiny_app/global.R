@@ -1,5 +1,6 @@
 library(data.table)
 library(shiny)
+library(shinyjs)
 library(bslib)
 library(plotly)
 library(tidyHeatmap)

@@ -34,6 +34,9 @@ plotly::ggplotly(fastp %>%
   ggeasy::easy_remove_x_axis(what = c('ticks', 'text')) +
   ggplot2::scale_color_manual(values = mpn65)
 )
+q30_below_75 = fastp %>% filter(after_filtering_q30_rate < 0.75) %>% pull(run)
+q30_below_75 %>% write_lines(here('output/fastp_reports/q30_below_70_samples.txt'))
+## Filtering for the percent of Q30 bases above 70% removes 3 samples
 picard = read_tsv(here('output/picard/multiqc_data/multiqc_picard_RnaSeqMetrics.txt')) %>% 
   janitor::clean_names() %>%
   rename(run = sample)
@@ -67,10 +70,8 @@ picard %>% left_join(metadata, by='run') %>%
          )
 ## Filtering out samples with coding bases less than 40% results in 15 samples being removed. 
 ## Only one of these samples (SRR10160904) is in the co-expression network.
-picard %>% 
-  left_join(metadata, by='run') %>%
-  left_join(counts_sums_jcvi, by='run') %>%
+low_coding_samples = picard %>% 
   filter(pct_coding_bases < 40) %>%
-  pull(run) %>%
-  write_lines(here('output/picard/low_coding_samples.txt'))
-
+  pull(run) 
+low_coding_samples %>% write_lines(here('output/picard/low_coding_samples.txt'))
+length(c(low_coding_samples, q30_below_75))

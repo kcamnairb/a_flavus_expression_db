@@ -1,7 +1,8 @@
 ui = navbarPage(
-  tags$style("#fieldsPanel {font-size:10px;height:10px;}
-             #group input {height:10px;}"
-  ),
+  # tags$style("#fieldsPanel {font-size:10px;height:10px;}
+  #            #group input {height:10px;}"
+  # ),
+  useShinyjs(),
   id='tabs',
   title = 'Aspergillus flavus expression database',
   tabPanel('Single gene barplot ',
@@ -135,7 +136,7 @@ ui = navbarPage(
              )
            )
   ),
-  tabPanel('JBrowse ',
+  tabPanel('Genome browser ',
            sidebarLayout(
             sidebarPanel(
               selectInput(inputId = 'dataset_jbrowse',
@@ -167,19 +168,21 @@ ui = navbarPage(
                   The samples included in the heatmap can be selected by bioproject in the final dropdown menu. 
                   When multiple bioprojects are selected, each bioproject will be shown in a separate group since there can be technical biases specific to each project.
                   Once the genes and bioprojects are selected click "Generate heatmap" to produce the visualization.
+                  Clicking on a cell in the heatmap will display the functional annotation for the gene and metadata for the sample.
+                  If the heatmap is too dense to see the text on the axes properly, drawing a rectangle on a portion of the heatmap will display a sub-heatmap below.
                   The expression values and functional data for the selected dataset or the entire dataset can be downloaded to an Excel file using the two buttons at the bottom left.
                   '),
            tags$h5('Co-expression network'),
            tags$p('This tab allows you to see genes that are positively and negatively correlated with your genes of interest using the same dropdown menus as the heatmap tab to select the genes.
                   After the subnetwork containing your genes of interest is displayed you can click on the "Enrichment analysis" button to look for functional
-                  terms that are enriched in the subnetwork using a hypergeometric test. Clicking on individual nodes in the network will show information about the corresponding gene.
+                  terms that are enriched in the subnetwork using a one-sided Fishers exact test. Clicking on individual nodes in the network will show information about the corresponding gene.
                   The edge weights for the subnetwork and functional annotation of the genes can be downloaded by clicking the button on the bottom left.'),
            tags$h5('PCA'),
            tags$p('This tab shows a principal component analysis of the samples using VST counts as input. 
                   Additional principal components can be shown using the second drop down menu.
                   The color of the samples defaults to the bioproject, but can also be changed to the strain or growth medium.'),
-           tags$h5('JBrowse'),
-           tags$p('This tab displays a genome browser showing an RNA-Seq track that is a mean of the coverage of all the samples.
+           tags$h5('Genome browser'),
+           tags$p('This tab displays a JBrowse genome browser showing an RNA-Seq track that is a mean of the coverage of all the samples.
                   Entering your gene of interest in the search bar will navigate the browser to the locus of that gene.
                   Looking at the coverage of a gene can allow you to evaluate the accuracy of a gene prediction.')
   ),
