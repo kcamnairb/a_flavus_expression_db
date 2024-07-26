@@ -1,6 +1,6 @@
 # Aspergillus flavus expression database
 
-This repository contains code to download all Aspergillus flavus RNA-Seq data from the NCBI SRA, process it to generate gene expression values, and visualize the results in a Shiny app.
+This repository contains code to download all Aspergillus flavus RNA-Seq data from the NCBI SRA, process it to generate gene expression values, and visualize the results in a Shiny app. The app can be viewed at https://a-flavus-expression-db-jyqnpeuvta-uc.a.run.app/.
 
 ## Pipeline
 
