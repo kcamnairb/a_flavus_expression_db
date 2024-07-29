@@ -160,11 +160,11 @@ ui = navbarPage(
                   plotted using either TPM or VST normalization for all samples.
                   The samples are colored by their bioproject and further details about the sample can be accessed by clicking on the bar for each sample.'),
            tags$h5('Multiple gene heatmap'),
-           tags$p('This tab allows you create a heatmap from either a user provided list of gene ids that are comma separated, 
+           tags$p('This tab allows you create a heatmap from either a user provided list of gene IDs that are comma separated, 
                   for example "AFLA_023020,AFLA_023020...", or you can choose groups of genes by functional annotation using the dropdown menus.
                   When the type of annotation is changed, the list of terms in the dropdown menu below it will be updated. 
                   When multiple functional categories are selected, the category each gene belongs to is indicated by a different color on the left of the heatmap.
-                  To provide a comma separated list of gene ids, first select "Gene list (Comma separated)" in the type of annotation menu.
+                  To provide a comma separated list of gene IDs, first select "Gene list (Comma separated)" in the type of annotation menu.
                   The samples included in the heatmap can be selected by bioproject in the final dropdown menu. 
                   When multiple bioprojects are selected, each bioproject will be shown in a separate group since there can be technical biases specific to each project.
                   Once the genes and bioprojects are selected click "Generate heatmap" to produce the visualization.
