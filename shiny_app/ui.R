@@ -19,6 +19,18 @@ ui = navbarPage(
                textInput(inputId = 'gene_id',
                          label = 'Gene ID',
                          value = 'AFLA_139360'),
+               pickerInput(inputId = 'bioprojects_to_include_barplot', 
+                           label = 'Choose bioprojects (all included by default)', 
+                           choices = bioproject_sizes %>% 
+                             mutate(bioproject_and_title = str_c(bioproject, study_title, sep=': ')) %>%
+                             pull(bioproject, name = bioproject_and_title), 
+                           selected = bioproject_sizes$bioproject,
+                           options = pickerOptions(
+                               actionsBox = TRUE,
+                               `selected-text-format`= 'count',
+                               `count-selected-text` = '{0} bioprojects selected'
+                             ),
+                           multiple=TRUE),
                downloadButton('download_single_gene_data', label = 'Download expression data for this gene')
              ),
              mainPanel(
@@ -39,7 +51,7 @@ ui = navbarPage(
                            choices = annotation_categories, 
                            selected = 'Gene Ontology'),
                selectizeInput(inputId = 'gene_categories', 
-                           label = 'Choose genes to include', 
+                           label = 'Choose genes', 
                            choices = '', 
                            multiple=TRUE, 
                            options = list(
@@ -51,7 +63,7 @@ ui = navbarPage(
                                  };
                               }"))),
                selectInput(inputId = 'bioprojects_to_include', 
-                           label = 'Choose bioprojects to include', 
+                           label = 'Choose bioprojects', 
                            choices = bioproject_sizes %>% filter(n > 10) %>% 
                              mutate(bioproject_and_title = str_c(bioproject, study_title, sep=': ')) %>%
                              pull(bioproject, name = bioproject_and_title), 
@@ -86,7 +98,7 @@ ui = navbarPage(
                            choices = annotation_categories, 
                            selected = 'Gene Ontology'),
                selectizeInput(inputId = 'gene_categories_network', 
-                              label = 'Choose genes to include', 
+                              label = 'Choose genes', 
                               choices = '', 
                               multiple=TRUE, 
                               options = list(
@@ -158,7 +170,8 @@ ui = navbarPage(
            tags$h5('Single gene barplot'),
            tags$p('This tab allows you to query any single gene and see the expression values
                   plotted using either TPM or VST normalization for all samples.
-                  The samples are colored by their bioproject and further details about the sample can be accessed by clicking on the bar for each sample.'),
+                  The samples are colored by their bioproject and further details about the sample can be accessed by clicking on the bar for each sample.
+                  Samples from all bioprojects are included by default but can be limited to individual bioprojects using the "Choose bioprojects" dropdown menu.'),
            tags$h5('Multiple gene heatmap'),
            tags$p('This tab allows you create a heatmap from either a user provided list of gene IDs that are comma separated, 
                   for example "AFLA_023020,AFLA_023020...", or you can choose groups of genes by functional annotation using the dropdown menus.

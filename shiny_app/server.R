@@ -13,6 +13,7 @@ server = function(input, output, session) {
       filter(gene_id == gene_of_interest) %>%
       pivot_longer(-gene_id, names_to='sra_run', values_to='expr_value') %>%
       left_join(metadata, by=c('sra_run' = 'run')) %>%
+      filter(bioproject %in% input$bioprojects_to_include_barplot) %>%
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
              sra_run = fct_inorder(sra_run)) %>%
