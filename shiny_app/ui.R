@@ -72,10 +72,7 @@ ui = navbarPage(
                actionButton("generate_heatmap", "Generate heatmap"),
                br(),
                br(),
-               downloadButton('download_multi_gene_data', label = 'Download expression data for these genes'),
-               br(),
-               br(),
-               downloadButton('download_entire_expression_dataset', label = 'Download entire expression dataset')
+               downloadButton('download_multi_gene_data', label = 'Download expression data for these genes')
              ),
              mainPanel(
                conditionalPanel(
@@ -197,7 +194,49 @@ ui = navbarPage(
            tags$h5('Genome browser'),
            tags$p('This tab displays a JBrowse genome browser showing an RNA-Seq track that is a mean of the coverage of all the samples.
                   Entering your gene of interest in the search bar will navigate the browser to the locus of that gene.
-                  Looking at the coverage of a gene can allow you to evaluate the accuracy of a gene prediction.')
+                  Looking at the coverage of a gene can allow you to evaluate the accuracy of a gene prediction.'),
+           tags$h5('Download data'),
+           tags$p('The entire expression dataset can be downloaded on this tab with the choices of TPM or VST normalization or raw read counts.
+                  Functional annotation and the entire co-expression network are also available and are in a format for easy import into Cytoscape.')
+  ),
+  tabPanel('Download data',
+           div(
+             style = "padding: 15px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px;",
+             h4("Expression and Functional Annotation Downloads"),
+             fluidRow(
+               column(width = 6,
+                      selectInput(inputId = 'dataset_download',
+                                  label = 'Choose an assembly/annotation:',
+                                  choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                              'GCA_009017415.1 (chromosome level)' = 'chrom_level')),
+                      selectInput(inputId = 'normalization_method_download',
+                                  label = 'Choose normalization method:',
+                                  choices = c('TPM (transcripts per million)' = 'TPM', 
+                                              'VST (variance stabilizing transformation)' = 'VST',
+                                              'raw read counts' = 'raw_read_counts'))
+               ),
+               column(width = 6,
+                      downloadButton('download_entire_expression_dataset', label = 'Download entire expression dataset'),
+                      br(), br(),
+                      downloadButton('download_all_functional_annotation', label = 'Download all functional annotation')
+               )
+             )
+           ),
+           div(
+             style = "padding: 15px; border: 1px solid #ddd; border-radius: 4px;",
+             h4("Co-expression Downloads"),
+             fluidRow(
+               column(width = 6,
+                      selectInput(inputId = 'dataset_coexpression_download',
+                                  label = 'Choose an assembly/annotation:',
+                                  choices = c('GCA_000006275.2 (JCVI-afl1-v2.0)' = 'JCVI', 
+                                              'GCA_009017415.1 (chromosome level)' = 'chrom_level'))
+               ),
+               column(width = 6,
+                      downloadButton('download_all_coexpression_edges', label = 'Download all co-expression edges')
+               )
+             )
+           )
   ),
   theme = bs_theme(bootswatch = 'cerulean')
 )

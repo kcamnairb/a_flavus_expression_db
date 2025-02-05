@@ -195,3 +195,48 @@ c('data/A_flavus_jcvi_tpm.csv', 'data/A_flavus_chrom_level_tpm.csv',
 'data/sra_metadata_filtered_hand_edited.csv' %>% walk(convert_file_to_fst)
 'data/functional_annotation_jcvi.csv' %>% walk(convert_file_to_fst)
 c('data/functional_annotation_chrom_level.csv') %>% walk(convert_file_to_fst)
+list(read_fst('data/vst_jcvi.fst') %>% as_tibble(), 
+          read_fst('data/vst_chrom_level.fst') %>% as_tibble(),
+          read_fst('data/A_flavus_jcvi_tpm.fst') %>% as_tibble(),
+          read_fst('data/A_flavus_chrom_level_tpm.fst') %>% as_tibble()) %>% 
+       setNames(c('JCVI_VST', 'chrom_level_VST', 'JCVI_TPM', 'chrom_level_TPM')) %>%
+  imap(~openxlsx::write.xlsx(.x,
+                             file = paste0('data/', .y, '_entire_dataset.xlsx'),
+                             firstRow = TRUE,
+                             firstCol = TRUE))
+list(functional_annotation %>% filter(genome == 'JCVI') %>% select(-genome),
+     functional_annotation %>% filter(genome == 'chrom_level') %>% select(-genome)) %>% 
+  setNames(c('JCVI', 'chrom_level')) %>%
+  imap(~openxlsx::write.xlsx(.x,
+                     file = paste0('data/', .y, '_functional_annotation.xlsx'),
+                     firstRow = TRUE,
+                     firstCol = TRUE))
+list(functional_annotation %>% filter(genome == 'JCVI') %>% select(-genome),
+     functional_annotation %>% filter(genome == 'chrom_level') %>% select(-genome)) %>% 
+  setNames(c('JCVI', 'chrom_level')) %>%
+  imap(~openxlsx::write.xlsx(.x,
+                             file = paste0('data/', .y, '_functional_annotation.xlsx'),
+                             firstRow = TRUE,
+                             firstCol = TRUE))
+df = read_rds('data/get_nondownsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+  toVisNetworkData() %>% .$edges %>% as_tibble() 
+df %>% 
+  rename('Source Node' = from, 'Target Node' = to) %>%
+  write_csv('data/JCVI_network_edge_data.csv.gz')
+functional_annotation %>% 
+  semi_join(tibble(gene_id = c(df$from, df$to) %>% unique())) %>%
+  write_csv('data/JCVI_network_node_data.csv.gz')
+df = read_rds('data/get_nondownsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+  toVisNetworkData() %>% .$edges %>% as_tibble() 
+df %>% 
+  rename('Source Node' = from, 'Target Node' = to) %>%
+  write_csv('data/chrom_level_network_edge_data.csv.gz')
+functional_annotation %>% 
+  semi_join(tibble(gene_id = c(df$from, df$to) %>% unique())) %>%
+  write_csv('data/chrom_level_network_node_data.csv.gz')
+c('output/star/jcvi_counts.csv', 'output/star_chrom_level/chrom_level_counts.csv') %>%
+  set_names(c('JCVI', 'chrom_level')) %>% 
+  imap(~here(.x) %>% read_csv() %>%
+        openxlsx::write.xlsx(file = paste0('data/', .y, '_raw_read_counts_entire_dataset.xlsx'),
+                             firstRow = TRUE,
+                             firstCol = TRUE))

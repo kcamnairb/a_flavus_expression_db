@@ -55,6 +55,7 @@ server = function(input, output, session) {
       df = df %>% filter(gene_id == input$gene_id) %>%
         pivot_longer(-gene_id, names_to='sra_run', values_to='TPM') %>%
         left_join(metadata, by=c('sra_run' = 'run')) %>%
+        filter(bioproject %in% input$bioprojects_to_include) %>%
         arrange(bioproject, sra_run)
       openxlsx::write.xlsx(df, file, firstRow = TRUE)
     })
@@ -88,16 +89,6 @@ server = function(input, output, session) {
     toggleState(id = "download_multi_gene_data", 
                 condition = length(input$gene_categories) > 0 & length(input$bioprojects_to_include) > 0)
   })
-  output$download_entire_expression_dataset = downloadHandler(
-    filename = 'A_flavus_VST_entire_dataset.xlsx',
-    content = function(file){
-      df = dataset_input_heatmap()
-      openxlsx::write.xlsx(list(df, functional_annotation %>% filter(genome == input$dataset_heatmap)) %>% 
-                             setNames(c('VST', 'functional_annotation')),
-                           file = file,
-                           firstRow = TRUE)
-    }
-  )
   multi_gene_heatmap = function(df, genes_of_interest, bioprojects_to_include){
     df = df %>%
       filter(gene_id %in% genes_of_interest) %>%
@@ -493,4 +484,26 @@ server = function(input, output, session) {
                                       "chrom_level"))
     )
   )
+  output$download_entire_expression_dataset = downloadHandler(
+    filename = function() {
+      paste0(input$dataset_download, '_', input$normalization_method_download, '_entire_dataset.xlsx')
+    },
+    content = function(file) {
+      file.copy(paste0('data/', input$dataset_download, '_', input$normalization_method_download, '_entire_dataset.xlsx'), file)
+    })
+  output$download_all_functional_annotation = downloadHandler(
+    filename = function() {
+      paste0(input$dataset_download, '_functional_annotation.xlsx')
+    },
+    content = function(file) {
+      file.copy(paste0('data/', input$dataset_download, '_functional_annotation.xlsx'), file)
+    })
+  output$download_all_coexpression_edges = downloadHandler(
+    filename = function() {
+      paste0(input$dataset_coexpression_download, '_network_edge_data.csv.gz')
+    },
+    content = function(file) {
+      file.copy(paste0('data/', input$dataset_coexpression_download, '_network_edge_data.csv.gz'), file)
+    })
+  
 }
