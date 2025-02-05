@@ -8,28 +8,41 @@ server = function(input, output, session) {
            'VST JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
            'VST chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
   })
-  single_gene_barplot = function(df, gene_of_interest){
-    dataset_input_barplot() %>%
+  
+  single_gene_barplot <- function(df, gene_of_interest, show_legend) {
+    data = dataset_input_barplot() %>%
       filter(gene_id == gene_of_interest) %>%
-      pivot_longer(-gene_id, names_to='sra_run', values_to='expr_value') %>%
-      left_join(metadata, by=c('sra_run' = 'run')) %>%
+      pivot_longer(-gene_id, names_to = 'sra_run', values_to = 'expr_value') %>%
+      left_join(metadata, by = c('sra_run' = 'run')) %>%
       filter(bioproject %in% input$bioprojects_to_include_barplot) %>%
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
-             sra_run = fct_inorder(sra_run)) %>%
-      ggplot(aes(sra_run, expr_value, fill=bioproject, label=sample_description, key=sra_run)) +
+             sra_run = fct_inorder(sra_run))
+    p = ggplot(data, aes(sra_run, expr_value, fill = bioproject, label = sample_description, key = sra_run)) +
       geom_col() +
       scale_fill_manual(values = mpn65) +
-      labs(title = gene_of_interest, x='Sample', y=input$normalization_method_barplot) +
-      ggeasy::easy_remove_legend() +
-      ggeasy::easy_remove_x_axis(what=c('tics', 'text', 'line')) +
-      ggeasy::easy_center_title()
+      labs(title = gene_of_interest, x = 'Sample', y = input$normalization_method_barplot) +
+      ggeasy::easy_rotate_x_labels(side='right') +
+      ggeasy::easy_x_axis_labels_size(6) +
+      ggeasy::easy_center_title() +
+      ggplot2::theme(legend.position = ifelse(show_legend, "right", "none"))
+    if (nrow(data) > 120) {
+      p = p + ggeasy::easy_remove_x_axis(what = c('tics', 'text', 'line'))
+    }
+    p
   }
-  output$barplot = renderPlotly({
+  showLegend <- reactiveVal(FALSE) 
+  
+  observeEvent(input$toggleLegend, {
+    showLegend(!showLegend())
+  })
+  
+  output$barplot <- renderPlotly({
     validate(need(input$gene_id, 'Enter a gene id'))
     validate(need(input$gene_id %in% dataset_input_barplot()$gene_id, 'Gene ID not in dataset'))
-    single_gene_barplot(dataset_input_barplot(), input$gene_id)
-  }) 
+    single_gene_barplot(dataset_input_barplot(), input$gene_id, showLegend())
+  })
+  
   # Change default gene_id value if the dataset changes
   observe({
     updateTextInput(inputId = 'gene_id', 
@@ -229,7 +242,8 @@ server = function(input, output, session) {
         visIgraphLayout(randomSeed=1234, type = "full", layout = 'layout_with_fr') %>%
         visEdges(width=3, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        visLegend(position = 'right', main = "Legend", addEdges = ledges)
+        visLegend(position = 'right', main = "Legend", addEdges = ledges) %>%
+        visExport(type = "png", name = "network_plot")
     } else if (!input$show_neighbors & !gene_list_provided) { 
       
       ## No gene list provided and neighbors not shown, coloring by annotation
@@ -249,7 +263,8 @@ server = function(input, output, session) {
         visIgraphLayout(randomSeed=1234, type = "full") %>%
         visEdges(width=3, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        visLegend(position = 'right', main = "Legend", addEdges = ledges)
+        visLegend(position = 'right', main = "Legend", addEdges = ledges) %>%
+        visExport(type = "png", name = "network_plot")
       } else if (!input$show_neighbors & gene_list_provided) { 
         
       # Gene list provided but don't need neighbors
@@ -263,7 +278,8 @@ server = function(input, output, session) {
         visIgraphLayout(randomSeed=1234, type = "full") %>%
         visEdges(width=3, smooth = FALSE) %>%
         visNodes(opacity=0.5) %>%
-        visLegend(position = 'right', main = "Legend", useGroups = FALSE, addEdges = ledges)
+        visLegend(position = 'right', main = "Legend", useGroups = FALSE, addEdges = ledges) %>%
+        visExport(type = "png", name = "network_plot")
       } else if (input$show_neighbors & !gene_list_provided) { 
         
         # No gene list provided and show neighbors
@@ -290,7 +306,8 @@ server = function(input, output, session) {
           visIgraphLayout(randomSeed=1234, type = "full") %>%
           visEdges(width=3, smooth = FALSE) %>%
           visNodes(opacity=0.5) %>%
-          visLegend(position = 'right', main = "Legend", addEdges = ledges)
+          visLegend(position = 'right', main = "Legend", addEdges = ledges) %>%
+          visExport(type = "png", name = "network_plot")
       }
     }
   observeEvent(input$generate_network,{
@@ -368,7 +385,7 @@ server = function(input, output, session) {
     filename = 'network_data.xlsx',
     content = function(file){
       df = rv$network_data
-      df$edges = df$edges %>% select(from, to, weight)
+      df$edges = df$edges %>% select(`Source Node` = from, `Target Node` = to, weight)
       df$nodes = df$nodes %>% select(any_of(c('id','protein name','KEGG pathways','Gene Ontology','Interpro domains',
                                             'Subcellular localization','deeploc_score',
                                             'biosynthetic gene clusters','mibig_accession','mibig_compound')))

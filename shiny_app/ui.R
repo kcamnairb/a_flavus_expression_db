@@ -31,7 +31,8 @@ ui = navbarPage(
                                `count-selected-text` = '{0} bioprojects selected'
                              ),
                            multiple=TRUE),
-               downloadButton('download_single_gene_data', label = 'Download expression data for this gene')
+               downloadButton('download_single_gene_data', label = 'Download expression data for this gene'),
+               actionButton("toggleLegend", "Toggle Legend")
              ),
              mainPanel(
                plotlyOutput('barplot'),
@@ -186,7 +187,8 @@ ui = navbarPage(
            tags$p('This tab allows you to see genes that are positively and negatively correlated with your genes of interest using the same dropdown menus as the heatmap tab to select the genes.
                   After the subnetwork containing your genes of interest is displayed you can click on the "Enrichment analysis" button to look for functional
                   terms that are enriched in the subnetwork using a one-sided Fishers exact test. Clicking on individual nodes in the network will show information about the corresponding gene.
-                  The edge weights for the subnetwork and functional annotation of the genes can be downloaded by clicking the button on the bottom left.'),
+                  The edge weights for the subnetwork and functional annotation of the genes can be downloaded by clicking the button on the bottom left.
+                  Just as a heads up, including a large number of genes in the network may cause the software to run out of memory and restart.'),
            tags$h5('PCA'),
            tags$p('This tab shows a principal component analysis of the samples using VST counts as input. 
                   Additional principal components can be shown using the second drop down menu.
