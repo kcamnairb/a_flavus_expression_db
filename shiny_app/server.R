@@ -1,12 +1,13 @@
 server = function(input, output, session) {
   rv = reactiveValues()
   ### Barplot ###
+  ### Barplot ###
   dataset_input_barplot = reactive({
     switch(paste(input$normalization_method_barplot, input$dataset_barplot),
            'TPM JCVI' = read_fst('data/A_flavus_jcvi_tpm.fst') %>% as_tibble(),
            'TPM chrom_level' = read_fst('data/A_flavus_chrom_level_tpm.fst') %>% as_tibble(),
            'VST JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
-           'VST chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
+           'VST chrom_level' = read_fst('data/vst_chrom_level_tpm.fst') %>% as_tibble()) # corrected typo
   })
   
   single_gene_barplot <- function(df, gene_of_interest, show_legend) {
@@ -15,6 +16,7 @@ server = function(input, output, session) {
       pivot_longer(-gene_id, names_to = 'sra_run', values_to = 'expr_value') %>%
       left_join(metadata, by = c('sra_run' = 'run')) %>%
       filter(bioproject %in% input$bioprojects_to_include_barplot) %>%
+      filter(`growth medium` %in% input$growth_mediums_to_include_barplot) %>% # Added line for growth medium filtering
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
              sra_run = fct_inorder(sra_run))
@@ -32,7 +34,6 @@ server = function(input, output, session) {
     p
   }
   showLegend <- reactiveVal(FALSE) 
-  
   observeEvent(input$toggleLegend, {
     showLegend(!showLegend())
   })
@@ -52,11 +53,11 @@ server = function(input, output, session) {
   output$sample_metadata_table = DT::renderDT({
     click_data = event_data('plotly_click')
     validate(need(!is.null(click_data), 'Click on a bar to get further sample data'))
-      metadata %>% filter(run == click_data$key) %>%
-        select(-sample_description) %>%
-        mutate(across(everything(), as.character)) %>%
-        pivot_longer(everything(), names_to='category', values_to='value') %>%
-        filter(!is.na(value))  
+    metadata %>% filter(run == click_data$key) %>%
+      select(-sample_description) %>%
+      mutate(across(everything(), as.character)) %>%
+      pivot_longer(everything(), names_to='category', values_to='value') %>%
+      filter(!is.na(value))  
   }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, dom = 't'), rownames = FALSE)
   ## Add a download button to download a table of the expression data
   output$download_single_gene_data = downloadHandler(
@@ -69,49 +70,91 @@ server = function(input, output, session) {
         pivot_longer(-gene_id, names_to='sra_run', values_to='TPM') %>%
         left_join(metadata, by=c('sra_run' = 'run')) %>%
         filter(bioproject %in% input$bioprojects_to_include) %>%
+        filter(`growth medium` %in% input$growth_mediums_to_include_barplot) %>% # Added line for growth medium filtering
         arrange(bioproject, sra_run)
       openxlsx::write.xlsx(df, file, firstRow = TRUE)
     })
-  ### Multi-gene heatmap ###
+  
+  ### Heatmap ###
   dataset_input_heatmap = reactive({
     switch(input$dataset_heatmap,
            'JCVI' = read_fst('data/vst_jcvi.fst') %>% as_tibble(),
            'chrom_level' = read_fst('data/vst_chrom_level.fst') %>% as_tibble())
   })
+  
+  # Helper function to filter SRA runs based on bioproject or growth medium
+  get_sra_runs_to_include <- function(){
+    if (input$selection_method == "bioproject") {
+      sra_runs_to_include = metadata %>%
+        filter(bioproject %in% input$bioprojects_to_include) %>%
+        pull(run)
+    } else { #growth medium
+      sra_runs_to_include = metadata %>%
+        filter(`growth medium` %in% input$growth_media_to_include) %>%
+        pull(run)
+    }
+    return(sra_runs_to_include)
+  }
+  
   output$download_multi_gene_data = downloadHandler(
     filename = 'A_flavus_VST.xlsx',
     content = function(file){
       df = dataset_input_heatmap()
-      sra_runs_to_include = metadata %>%
-        filter(bioproject %in% input$bioprojects_to_include) %>%
-        pull(run)
-      gene_ids_to_include =  annotation_list[[input$annotation_category]] %>% 
-        filter(display_text %in% input$gene_categories) %>% 
+      
+      sra_runs_to_include = get_sra_runs_to_include()
+      
+      gene_ids_to_include =  annotation_list[[input$annotation_category]] %>%
+        filter(display_text %in% input$gene_categories) %>%
         pull(gene_id) %>% unlist()
-      df = df %>% 
+      
+      df = df %>%
         filter(gene_id %in% gene_ids_to_include) %>%
         select(all_of(c('gene_id', sra_runs_to_include)))
-      annotation_data = functional_annotation %>% 
+      
+      annotation_data = functional_annotation %>%
         filter(gene_id %in% gene_ids_to_include)
-      openxlsx::write.xlsx(list(df, annotation_data) %>% 
-                             setNames(c('VST', 'functional_annotation')), 
+      
+      openxlsx::write.xlsx(list(df, annotation_data) %>%
+                             setNames(c('VST', 'functional_annotation')),
                            file, firstRow = TRUE)
     }
   )
+  
+  # Observe to update the state of the Generate heatmap button
   observe({
-    toggleState(id = "download_multi_gene_data", 
-                condition = length(input$gene_categories) > 0 & length(input$bioprojects_to_include) > 0)
+    req(input$selection_method) # Require selection method
+    
+    # Condition depends on selection method and gene selection
+    condition <- length(input$gene_categories) > 0
+    
+    if (condition) { # only proceed if at least one gene is selected
+      if (input$selection_method == "bioproject") {
+        condition <- condition && length(input$bioprojects_to_include) > 0
+      } else {
+        condition <- condition && length(input$growth_media_to_include) > 0
+      }
+    }
+    
+    toggleState(id = "generate_heatmap", condition = condition)
   })
-  multi_gene_heatmap = function(df, genes_of_interest, bioprojects_to_include){
+  
+  
+  multi_gene_heatmap = function(df, genes_of_interest, selected_values, selection_type){
     df = df %>%
       filter(gene_id %in% genes_of_interest) %>%
       pivot_longer(-gene_id, names_to='sra_run', values_to='VST') %>%
-      left_join(metadata, by=c('sra_run' = 'run')) %>%
-      filter(bioproject %in% bioprojects_to_include) 
+      left_join(metadata, by=c('sra_run' = 'run'))
+    
+    if (selection_type == "bioproject") {
+      df <- df %>% filter(bioproject %in% selected_values)
+    } else {
+      df <- df %>% filter(`growth medium` %in% selected_values)
+    }
+    
     if (length(input$gene_categories) > 1) {
-      df = df %>% 
+      df = df %>%
         left_join(
-          annotation_list[[input$annotation_category]] %>% 
+          annotation_list[[input$annotation_category]] %>%
             filter(display_text %in% input$gene_categories) %>%
             unnest(gene_id),
           by='gene_id') %>%
@@ -120,16 +163,18 @@ server = function(input, output, session) {
         ungroup() %>%
         data.table::setnames('column_to_select', input$annotation_category)
     }
-    if (length(bioprojects_to_include) > 1) {
+    
+    if(length(unique(df$bioproject)) > 1){
       ht = df %>%
         group_by(bioproject) %>%
         heatmap(gene_id, sra_run, VST, column_names_gp = gpar(fontsize = 8),
                 row_names_gp = gpar(fontsize = 8))
-    } else{
+    } else {
       ht = df %>%
         heatmap(gene_id, sra_run, VST, column_names_gp = gpar(fontsize = 8),
                 row_names_gp = gpar(fontsize = 8))
     }
+    
     if (length(input$gene_categories) > 1 & input$annotation_category != 'Gene list (Comma separated)') {
       column = sym(input$annotation_category)
       ht = ht %>% annotation_tile(!!column, palette = mpn65)
@@ -139,30 +184,41 @@ server = function(input, output, session) {
     ht = draw(ht)
     return(ht)
   }
-  observe({
-    toggleState(id = "generate_heatmap", 
-                condition = length(input$gene_categories) > 0 & length(input$bioprojects_to_include) > 0)
-  })
+  
   observeEvent(input$generate_heatmap,{
     validate(need(length(input$gene_categories) > 0, 'Select at least one gene'),
-             need(length(input$bioprojects_to_include) > 0, 'Select at least one bioproject'))
+             need(input$selection_method, 'Select bioproject or growth medium.'),
+             if (input$selection_method == "bioproject") need(length(input$bioprojects_to_include) > 0, 'Select at least one bioproject')
+             else need(length(input$growth_media_to_include) > 0, 'Select at least one growth medium'))
+    
+    genes_to_include <- annotation_list[[input$annotation_category]] %>%
+      filter(display_text %in% input$gene_categories) %>%
+      pull(gene_id) %>% unlist() %>%
+      str_split(',') %>% unlist()
+    
+    selected_values <- if (input$selection_method == "bioproject") input$bioprojects_to_include else input$growth_media_to_include
+    
+    # Force re-evaluation of reactive expressions
+    force(input$bioprojects_to_include)
+    force(input$growth_media_to_include)
+    
     makeInteractiveComplexHeatmap(
       input, output, session,
-      ht_list = multi_gene_heatmap(dataset_input_heatmap(), 
-                                   annotation_list[[input$annotation_category]] %>% 
-                                     filter(display_text %in% input$gene_categories) %>% 
-                                     pull(gene_id) %>% unlist() %>%
-                                     str_split(',') %>% unlist(), 
-                                   input$bioprojects_to_include),
+      ht_list = multi_gene_heatmap(dataset_input_heatmap(),
+                                   genes_to_include,
+                                   selected_values,
+                                   input$selection_method),
       click_action = click_action_heatmap
     )
   })
+  
   observe({
     updateSelectInput(session, "gene_categories",
-                      choices = annotation_list[[input$annotation_category]] %>% 
+                      choices = annotation_list[[input$annotation_category]] %>%
                         filter(genome == input$dataset_heatmap) %>%
                         pull(display_text))
   })
+  
   click_action_heatmap = function(df, output) {
     output[["gene_info"]] = renderUI({
       if(!is.null(df)) {
@@ -171,12 +227,12 @@ server = function(input, output, session) {
         gene = rownames(rv$m)[row_index]
         sra_run = colnames(rv$m)[column_index]
         VST = rv$m[row_index, column_index, drop = TRUE]
-        run_data = metadata %>% 
+        run_data = metadata %>%
           filter(run == sra_run) %>%
           select(-sample_description) %>%
           mutate(across(everything(), as.character)) %>%
           pivot_longer(everything(), names_to='category', values_to='value') %>%
-          filter(!is.na(value))  
+          filter(!is.na(value))
         gene_data = functional_annotation %>%
           filter(gene_id == gene) %>%
           mutate(`Ensemble Fungi` = paste0('https://fungi.ensembl.org/Aspergillus_flavus/Gene/Summary?g=', gene_id),
@@ -194,6 +250,8 @@ server = function(input, output, session) {
       }
     })
   }
+  
+
  
   ### Co-expression network ###
   add_network_annotation = function(network){

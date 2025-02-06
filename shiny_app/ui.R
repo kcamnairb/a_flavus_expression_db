@@ -26,10 +26,21 @@ ui = navbarPage(
                              pull(bioproject, name = bioproject_and_title), 
                            selected = bioproject_sizes$bioproject,
                            options = pickerOptions(
-                               actionsBox = TRUE,
-                               `selected-text-format`= 'count',
-                               `count-selected-text` = '{0} bioprojects selected'
-                             ),
+                             actionsBox = TRUE,
+                             `selected-text-format`= 'count',
+                             `count-selected-text` = '{0} bioprojects selected'
+                           ),
+                           multiple=TRUE),
+               # Added growth medium pickerInput
+               pickerInput(inputId = 'growth_mediums_to_include_barplot', 
+                           label = 'Choose growth mediums (all included by default)', 
+                           choices = sort(unique(metadata$`growth medium`)), # unique growth mediums from metadata
+                           selected = unique(metadata$`growth medium`), # Select all by default
+                           options = pickerOptions(
+                             actionsBox = TRUE,
+                             `selected-text-format`= 'count',
+                             `count-selected-text` = '{0} growth mediums selected'
+                           ),
                            multiple=TRUE),
                downloadButton('download_single_gene_data', label = 'Download expression data for this gene'),
                actionButton("toggleLegend", "Toggle Legend")
@@ -52,24 +63,38 @@ ui = navbarPage(
                            choices = annotation_categories, 
                            selected = 'Gene Ontology'),
                selectizeInput(inputId = 'gene_categories', 
-                           label = 'Choose genes', 
-                           choices = '', 
-                           multiple=TRUE, 
-                           options = list(
-                             delimiter = ',',
-                             create = I("function(input, callback){
+                              label = 'Choose genes', 
+                              choices = '', 
+                              multiple=TRUE, 
+                              options = list(
+                                delimiter = ',',
+                                create = I("function(input, callback){
                                 return {
                                   value: input,
                                   text: input
                                  };
                               }"))),
-               selectInput(inputId = 'bioprojects_to_include', 
-                           label = 'Choose bioprojects', 
-                           choices = bioproject_sizes %>% filter(n > 10) %>% 
-                             mutate(bioproject_and_title = str_c(bioproject, study_title, sep=': ')) %>%
-                             pull(bioproject, name = bioproject_and_title), 
-                           selected = bioproject_sizes$bioproject[1:2],
-                           multiple=TRUE),
+               radioButtons("selection_method", "Select samples by:",
+                            choices = c("bioproject" = "bioproject",
+                                        "growth medium" = "growth_medium")),
+               conditionalPanel(
+                 condition = "input.selection_method == 'bioproject'",
+                 selectInput(inputId = 'bioprojects_to_include', 
+                             label = 'Choose bioprojects', 
+                             choices = bioproject_sizes %>% filter(n > 10) %>% 
+                               mutate(bioproject_and_title = str_c(bioproject, study_title, sep=': ')) %>%
+                               pull(bioproject, name = bioproject_and_title), 
+                             selected = bioproject_sizes$bioproject[1:2],
+                             multiple=TRUE)
+               ),
+               conditionalPanel(
+                 condition = "input.selection_method == 'growth_medium'",
+                 selectInput(inputId = 'growth_media_to_include', 
+                             label = 'Choose growth media', 
+                             choices = metadata %>% distinct(`growth medium`) %>% 
+                               filter(!is.na(`growth medium`)) %>% pull(`growth medium`), # Replace with the column name for growth medium
+                             multiple=TRUE)
+               ),
                actionButton("generate_heatmap", "Generate heatmap"),
                br(),
                br(),
@@ -79,8 +104,8 @@ ui = navbarPage(
                conditionalPanel(
                  condition = "input.generate_heatmap > 0",
                  InteractiveComplexHeatmapOutput(title1 = "Full heatmap", layout = "1|(2-3)", width1=900, height1=450, 
-                                               action = 'click', output_ui = htmlOutput("gene_info"))
-             ))
+                                                 action = 'click', output_ui = htmlOutput("gene_info"))
+               ))
            )
   ),
   
