@@ -179,6 +179,10 @@ server = function(input, output, session) {
       column = sym(input$annotation_category)
       ht = ht %>% annotation_tile(!!column, palette = mpn65)
     }
+    if (length(input$growth_media_to_include) > 0 & input$selection_method == 'growth_medium') {
+      column = sym(input$annotation_category)
+      ht = ht %>% annotation_tile(`growth medium`, palette = RColorBrewer::brewer.pal(12, 'Set3'))
+    }
     ht = ht %>% as_ComplexHeatmap()
     rv$m = ht@matrix
     ht = draw(ht)
