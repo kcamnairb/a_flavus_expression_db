@@ -1,6 +1,6 @@
-# Aspergillus flavus expression database
+# *Aspergillus flavus* expression database
 
-This repository contains code to download all Aspergillus flavus RNA-Seq data from the NCBI SRA, process it to generate gene expression values, and visualize the results in a Shiny app. The app can be viewed at https://a-flavus-expression-db-jyqnpeuvta-uc.a.run.app/.
+This repository contains code to download all *Aspergillus flavus* RNA-Seq data from the NCBI SRA, process it to generate gene expression values, and visualize the results in a Shiny app. The app can be viewed at https://a-flavus-expression-db-jyqnpeuvta-uc.a.run.app/.
 
 ## Pipeline
 
@@ -21,3 +21,9 @@ The app has five tools, each on a different tab:
 4. PCA: Shows PCA of variance stabilized transformed counts and colors samples by various metadata.
 5. JBrowse: Shows genome browser with genes and RNA-Seq coverage track representing the average across all samples.
 
+## Citation
+If you use the *Aspergillus flavus* Expresssion Database in your research, please cite the following publication:
+
+-   Brian M Mack, Matthew D Lebar, AFED, a comprehensive resource for *Aspergillus
+    flavus* gene expression profiling, *Database*, Volume 2025, 2025, baaf033, 
+    https://doi.org/10.1093/database/baaf033
