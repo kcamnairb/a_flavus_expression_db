@@ -1,11 +1,11 @@
 library(here)
 library(tidyverse)
 
-fastp_reports = read_tsv(here('output/fastp_reports/filtered/multiqc_data/multiqc_general_stats.txt')) %>%
+fastp_reports = read_tsv(here('output/fastp_reports/multiqc_data/multiqc_general_stats.txt')) %>%
   rename_with(~str_remove(.x, 'fastp_mqc-generalstats-fastp-')) %>%
   dplyr::rename(run = Sample) %>%
   mutate(run = str_remove(run, '_1'))
-counts_jcvi = read_csv(here('output/star/jcvi_counts.csv'))
+counts_jcvi = read_csv(here('output/star/jcvi_counts_unfiltered.csv'))
 sra_df = read_csv(here('output/sra_metadata.csv'))
 
 counts_sums_jcvi = counts_jcvi %>% 
@@ -27,7 +27,7 @@ plotly::ggplotly(fastp %>%
            filter(total_counts >= 1e6, run != 'SRR8526599') %>%
            pivot_longer(cols=c(pct_duplication, after_filtering_gc_content, pct_surviving, total_counts),
                         names_to = 'metric', values_to = 'value') %>%
-  ggplot(aes(x=run, y=value, color=bioproject, label=title2)) +
+  ggplot(aes(x=run, y=value, label=title2, key=bioproject)) +
   geom_col() +
   facet_wrap(~metric, ncol = 1, scales = 'free') +
   ggeasy::easy_remove_legend() +
@@ -35,8 +35,9 @@ plotly::ggplotly(fastp %>%
   ggplot2::scale_color_manual(values = mpn65)
 )
 q30_below_75 = fastp %>% filter(after_filtering_q30_rate < 0.75) %>% pull(run)
-q30_below_75 %>% write_lines(here('output/fastp_reports/q30_below_70_samples.txt'))
+q30_below_75 %>% write_lines('output/fastp_reports/q30_below_75_samples.txt')
 ## Filtering for the percent of Q30 bases above 70% removes 3 samples
+## With 5/21/25 update, 21 samples removed
 picard = read_tsv(here('output/picard/multiqc_data/multiqc_picard_RnaSeqMetrics.txt')) %>% 
   janitor::clean_names() %>%
   rename(run = sample)
@@ -70,6 +71,7 @@ picard %>% left_join(metadata, by='run') %>%
          )
 ## Filtering out samples with coding bases less than 40% results in 15 samples being removed. 
 ## Only one of these samples (SRR10160904) is in the co-expression network.
+## With 5/21/25 update, 317 samples removed
 low_coding_samples = picard %>% 
   filter(pct_coding_bases < 40) %>%
   pull(run) 

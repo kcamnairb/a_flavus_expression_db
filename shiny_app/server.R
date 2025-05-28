@@ -16,13 +16,13 @@ server = function(input, output, session) {
       pivot_longer(-gene_id, names_to = 'sra_run', values_to = 'expr_value') %>%
       left_join(metadata, by = c('sra_run' = 'run')) %>%
       filter(bioproject %in% input$bioprojects_to_include_barplot) %>%
-      filter(`growth medium` %in% input$growth_mediums_to_include_barplot) %>% # Added line for growth medium filtering
+      filter(growth_medium %in% input$growth_mediums_to_include_barplot) %>% # Added line for growth medium filtering
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
              sra_run = fct_inorder(sra_run))
     p = ggplot(data, aes(sra_run, expr_value, fill = bioproject, label = sample_description, key = sra_run)) +
       geom_col() +
-      scale_fill_manual(values = mpn65) +
+      scale_fill_manual(values = colors202) +
       labs(title = gene_of_interest, x = 'Sample', y = input$normalization_method_barplot) +
       ggeasy::easy_rotate_x_labels(side='right') +
       ggeasy::easy_x_axis_labels_size(6) +
@@ -67,10 +67,10 @@ server = function(input, output, session) {
     content = function(file) {
       df = dataset_input_barplot()
       df = df %>% filter(gene_id == input$gene_id) %>%
-        pivot_longer(-gene_id, names_to='sra_run', values_to='TPM') %>%
+        pivot_longer(-gene_id, names_to='sra_run', values_to=input$normalization_method_barplot) %>%
         left_join(metadata, by=c('sra_run' = 'run')) %>%
         filter(bioproject %in% input$bioprojects_to_include) %>%
-        filter(`growth medium` %in% input$growth_mediums_to_include_barplot) %>% # Added line for growth medium filtering
+        filter(growth_medium %in% input$growth_mediums_to_include_barplot) %>% # Added line for growth medium filtering
         arrange(bioproject, sra_run)
       openxlsx::write.xlsx(df, file, firstRow = TRUE)
     })
@@ -90,7 +90,7 @@ server = function(input, output, session) {
         pull(run)
     } else { #growth medium
       sra_runs_to_include = metadata %>%
-        filter(`growth medium` %in% input$growth_media_to_include) %>%
+        filter(growth_medium %in% input$growth_media_to_include) %>%
         pull(run)
     }
     return(sra_runs_to_include)
@@ -148,7 +148,7 @@ server = function(input, output, session) {
     if (selection_type == "bioproject") {
       df <- df %>% filter(bioproject %in% selected_values)
     } else {
-      df <- df %>% filter(`growth medium` %in% selected_values)
+      df <- df %>% filter(growth_medium %in% selected_values)
     }
     
     if (length(input$gene_categories) > 1) {
@@ -177,11 +177,11 @@ server = function(input, output, session) {
     
     if (length(input$gene_categories) > 1 & input$annotation_category != 'Gene list (Comma separated)') {
       column = sym(input$annotation_category)
-      ht = ht %>% annotation_tile(!!column, palette = mpn65)
+      ht = ht %>% annotation_tile(!!column, palette = colors202)
     }
     if (length(input$growth_media_to_include) > 0 & input$selection_method == 'growth_medium') {
       column = sym(input$annotation_category)
-      ht = ht %>% annotation_tile(`growth medium`, palette = RColorBrewer::brewer.pal(12, 'Set3'))
+      ht = ht %>% annotation_tile(growth_medium, palette = RColorBrewer::brewer.pal(12, 'Set3'))
     }
     ht = ht %>% as_ComplexHeatmap()
     rv$m = ht@matrix
@@ -478,7 +478,7 @@ server = function(input, output, session) {
       mutate(across(c(strain, sample_type,  source_name, genotype, treatment, isolate), 
                     ~na_if(.x, 'missing'))) %>%
       mutate(strain = str_replace(strain, 'NRRL3357|NR3357', 'NRRL 3357')) %>%
-      unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate,
+      unite('sample_description', strain, sample_type,  source_name, genotype, treatment, isolate, study_title,
             sep = ';', na.rm =TRUE, remove = FALSE) %>% 
       ggplot(aes(.data[[paste0('PC',input$pc_x)]], .data[[paste0('PC',as.numeric(input$pc_x) + 1)]], 
                  color=.data[[input$category_to_color_pca]], label=sample_description, key=run)) +
@@ -486,7 +486,7 @@ server = function(input, output, session) {
       xlab(paste0("PC", input$pc_x, ": ",percent_var[as.numeric(input$pc_x)],"% variance")) +
       ylab(paste0("PC", as.numeric(input$pc_x) + 1, ": ",percent_var[as.numeric(input$pc_x) + 1],"% variance")) +
       theme_bw() +
-      scale_fill_manual(values = mpn65) +
+      scale_fill_manual(values = colors202) +
       ggeasy::easy_remove_legend() 
   }
   output$pca = renderPlotly({
@@ -583,6 +583,13 @@ server = function(input, output, session) {
     },
     content = function(file) {
       file.copy(paste0('data/', input$dataset_coexpression_download, '_network_edge_data.csv.gz'), file)
+    })
+  output$download_all_sample_metadata = downloadHandler(
+    filename = function() {
+      'sample_metadata.csv'
+    },
+    content = function(file) {
+      file.copy('data/sra_metadata_filtered_hand_edited.csv', file)
     })
   
 }

@@ -6,7 +6,6 @@ counts_star_jcvi = list.files(here('output/star/'), pattern = 'ReadsPerGene.out.
   imap(~read_tsv(.x, skip = 4, col_names = c('gene_id', 'count_unstranded', 'count_strand1', 'count_strand2')) %>%
          mutate(file = str_replace(.y, '.*/(.*)_Reads.*', '\\1')) %>%
          rename(run = file))
-sra_df = read_csv(here('output/sra_metadata.csv'), col_types = cols(.default = col_character()))
 count_strand_totals = counts_star_jcvi %>% map(~.x %>%
   summarize(count_unstranded= sum(count_unstranded),
             count_strand1 = sum(count_strand1), 
@@ -20,9 +19,11 @@ count_strand_totals = counts_star_jcvi %>% map(~.x %>%
   mutate(strand_specificity = case_when(frac_strand1 > 0.7 ~ 'strand1',
                                         frac_strand1 < 0.3 ~ 'strand2',
                                         frac_strand1 >= 0.3 & frac_strand1 <= 0.7 ~ 'unstranded')) %>%
+  replace_na(list(strand_specificity = 'unstranded')) |> # just for creating list of low count samples
   left_join(sra_df, by='run')
 count_strand_totals %>% write_csv(here('output/star/strand_totals.csv'))
-count_strand_totals = read_csv(here('output/star/strand_totals.csv'))
+count_strand_totals = read_csv(here('output/star/strand_totals.csv'), 
+                               col_types = cols(.default = "c"))
 p = count_strand_totals %>%
   ggplot(aes(frac_strand1, frac_strand2, key=bioproject)) +
   geom_point(alpha=0.1) +
@@ -37,9 +38,12 @@ select_star_count_col = function(df){
     pull(strand_specificity)
   df %>% select(gene_id, !!quo_name(current_run) := all_of(paste0('count_', current_strand_specificity)))
 }
-counts_star_jcvi = counts_star_jcvi %>% 
+counts_star_jcvi = counts_star_jcvi %>%
   map(select_star_count_col) %>% 
   reduce(full_join)
+counts_star_jcvi %>% write_csv(here('output/star/jcvi_counts_unfiltered.csv'))
+sra_df = read_csv(here('output/sra_metadata.csv'), 
+                  col_types = cols(.default = col_character()))
 counts_star_jcvi = counts_star_jcvi %>% 
   filter(!str_detect(gene_id, 'tRNA'))
 counts_sums_jcvi = counts_star_jcvi %>% 
@@ -51,7 +55,8 @@ q30_below_75 = read_lines(here('output/fastp_reports/q30_below_75_samples.txt'))
 samples_to_keep = counts_sums_jcvi %>% 
   filter(total_counts >= 1e6, 
          !run %in% low_coding_samples,
-         !run %in% q30_below_75) %>%
+         !run %in% q30_below_75,
+         run %in% sra_df$run) %>%
   pull(run)
 length(samples_to_keep)
 counts_star_jcvi  = counts_star_jcvi %>% select(all_of(c('gene_id', samples_to_keep)))
@@ -59,9 +64,8 @@ counts_star_jcvi %>% write_csv(here('output/star/jcvi_counts.csv'))
 counts_star_jcvi = read_csv(here('output/star/jcvi_counts.csv'))
 metadata = sra_df %>% 
   filter(run %in% samples_to_keep)
-metadata %>% 
-  select(-collection_date, run_title = title2) %>%
-  dplyr::rename(growth_condition = `growth condition`) %>%
+metadata = metadata %>% 
+  select(-c(collection_date), run_title = title2) %>% 
   mutate(across(c(strain, sample_type,  source_name, genotype),
                 ~str_remove(.x, regex('^A.* flavus ', ignore_case = TRUE)))) %>%
   mutate(date = as.character(date)) %>%
@@ -72,14 +76,15 @@ metadata %>%
                            TRUE ~ run_title)) %>%
   mutate(title = str_remove(title, 'GSM.*?: ') %>% str_remove('; Aspergillus flavus; RNA-Seq')) %>%
   ungroup() %>%
-  unite('sample_description', title, strain, sample_type, source_name, genotype, treatment, timepoint, growth_condition, isolate,
+  unite('sample_description', title, strain, sample_type, source_name, genotype, treatment, time_point, growth_condition, isolate,
         sep = ';', na.rm =TRUE, remove = FALSE) %>%
   mutate(submitter = str_c(first_name, last_name, collapse = ' ')) %>%
-  select(-first_name, -last_name, -BioSampleModel, -pubmed) %>%
+  select(-first_name, -last_name, -bio_sample_model, -pubmed) %>%
   mutate(doi = ifelse(is.na(doi), NA, str_glue('https://doi.org/{doi}'))) %>%
   mutate(doi = ifelse(is.na(doi), NA, str_glue("<a href='{doi}'>{doi}</a>"))) %>%
   select(-filename) %>%
-  mutate(strain = if_else(bioproject == 'PRJNA1085269', 'NRRL 3357', strain)) %>%
+  mutate(strain = if_else(bioproject == 'PRJNA1085269', 'NRRL 3357', strain))
+metadata %>% 
   write_csv(here('shiny_app/data/sra_metadata_filtered.csv'))
 counts_star_chrom_level = list.files(here('output/star_chrom_level/'), pattern = 'ReadsPerGene.out.tab', full.names = TRUE) %>%
   set_names() %>%
@@ -100,17 +105,18 @@ count_strand_totals_chrom_level = counts_star_chrom_level %>% map(~.x %>%
                                         frac_strand1 < 0.3 ~ 'strand2',
                                         frac_strand1 >= 0.3 & frac_strand1 <= 0.7 ~ 'unstranded')) %>%
   left_join(sra_df, by='run')
-counts_star_chrom_level  = counts_star_chrom_level %>% select(all_of(c('gene_id', samples_to_keep)))
-count_strand_totals_chrom_level %>% write_csv(here('output/star_chrom_level/strand_totals.csv'))
-count_strand_totals %>%
-  left_join(count_strand_totals_chrom_level, by='run', suffix = c('_jcvi', '_chrom')) %>% 
-  summarize(sum(strand_specificity_jcvi != strand_specificity_chrom))
 counts_star_chrom_level = counts_star_chrom_level %>% 
   map(select_star_count_col) %>% 
   reduce(full_join)
-counts_star_chrom_level %>% 
-  mutate(gene_id = str_remove(gene_id, 'gene-')) %>%
-  write_csv(here('output/star_chrom_level/chrom_level_counts.csv'))
+counts_star_chrom_level %>% write_csv(here('output/star_chrom_level/chrom_level_counts_unfiltered.csv'))
+count_strand_totals_chrom_level %>% write_csv(here('output/star_chrom_level/strand_totals.csv'))
+counts_star_chrom_level = counts_star_chrom_level %>% select(all_of(c('gene_id', samples_to_keep)))
+count_strand_totals %>%
+  left_join(count_strand_totals_chrom_level, by='run', suffix = c('_jcvi', '_chrom')) %>% 
+  summarize(sum(strand_specificity_jcvi != strand_specificity_chrom))
+counts_star_chrom_level= counts_star_chrom_level %>% 
+  mutate(gene_id = str_remove(gene_id, 'gene-'))
+counts_star_chrom_level %>% write_csv(here('output/star_chrom_level/chrom_level_counts.csv'))
 counts_star_chrom_level = read_csv(here('output/star_chrom_level/chrom_level_counts.csv'))
 counts_sums_chrom_level = counts_star_chrom_level %>% 
   pivot_longer(-gene_id, names_to='run', values_to='counts') %>%
@@ -122,7 +128,7 @@ counts_sums_jcvi %>%
 metadata_pca = metadata %>% 
   mutate(run = factor(run, levels = colnames(counts_star_jcvi)[2:ncol(counts_star_jcvi)])) %>%
   arrange(run) %>%
-  left_join(qc, by='run') %>%
+  #left_join(qc, by='run') %>%
   column_to_rownames('run') %>%
   mutate(run = rownames(.))
   
@@ -189,54 +195,54 @@ transcript_lengths_chrom_level = read_csv(
 tpm_chrom_level = counts_star_chrom_level %>% tpm_normalize(transcript_lengths_chrom_level)
 tpm_chrom_level %>% write_csv(here('shiny_app/data/A_flavus_chrom_level_tpm.csv'))
 convert_file_to_fst = function(file) read_csv(file) %>% write_fst(str_replace(file, '\\.csv', '.fst'))
-c('data/A_flavus_jcvi_tpm.csv', 'data/A_flavus_chrom_level_tpm.csv',
-  'data/vst_jcvi.csv', 'data/vst_chrom_level.csv') %>% walk(convert_file_to_fst)
-'data/sra_metadata_filtered.csv' %>% walk(convert_file_to_fst)
-'data/sra_metadata_filtered_hand_edited.csv' %>% walk(convert_file_to_fst)
-'data/functional_annotation_jcvi.csv' %>% walk(convert_file_to_fst)
-c('data/functional_annotation_chrom_level.csv') %>% walk(convert_file_to_fst)
-list(read_fst('data/vst_jcvi.fst') %>% as_tibble(), 
-          read_fst('data/vst_chrom_level.fst') %>% as_tibble(),
-          read_fst('data/A_flavus_jcvi_tpm.fst') %>% as_tibble(),
-          read_fst('data/A_flavus_chrom_level_tpm.fst') %>% as_tibble()) %>% 
+c('shiny_app/data/A_flavus_jcvi_tpm.csv', 'shiny_app/data/A_flavus_chrom_level_tpm.csv',
+  'shiny_app/data/vst_jcvi.csv', 'shiny_app/data/vst_chrom_level.csv') %>% walk(convert_file_to_fst)
+'shiny_app/data/sra_metadata_filtered.csv' %>% walk(convert_file_to_fst)
+'shiny_app/data/sra_metadata_filtered_hand_edited.csv' %>% walk(convert_file_to_fst)
+'shiny_app/data/functional_annotation_jcvi.csv' %>% walk(convert_file_to_fst)
+'shiny_app/data/functional_annotation_chrom_level.csv' %>% walk(convert_file_to_fst)
+list(read_fst('shiny_app/data/vst_jcvi.fst') %>% as_tibble(), 
+          read_fst('shiny_app/data/vst_chrom_level.fst') %>% as_tibble(),
+          read_fst('shiny_app/data/A_flavus_jcvi_tpm.fst') %>% as_tibble(),
+          read_fst('shiny_app/data/A_flavus_chrom_level_tpm.fst') %>% as_tibble()) %>% 
        setNames(c('JCVI_VST', 'chrom_level_VST', 'JCVI_TPM', 'chrom_level_TPM')) %>%
   imap(~openxlsx::write.xlsx(.x,
-                             file = paste0('data/', .y, '_entire_dataset.xlsx'),
+                             file = paste0('shiny_app/data/', .y, '_entire_dataset.xlsx'),
                              firstRow = TRUE,
                              firstCol = TRUE))
 list(functional_annotation %>% filter(genome == 'JCVI') %>% select(-genome),
      functional_annotation %>% filter(genome == 'chrom_level') %>% select(-genome)) %>% 
   setNames(c('JCVI', 'chrom_level')) %>%
   imap(~openxlsx::write.xlsx(.x,
-                     file = paste0('data/', .y, '_functional_annotation.xlsx'),
+                     file = paste0('shiny_app/data/', .y, '_functional_annotation.xlsx'),
                      firstRow = TRUE,
                      firstCol = TRUE))
 list(functional_annotation %>% filter(genome == 'JCVI') %>% select(-genome),
      functional_annotation %>% filter(genome == 'chrom_level') %>% select(-genome)) %>% 
   setNames(c('JCVI', 'chrom_level')) %>%
   imap(~openxlsx::write.xlsx(.x,
-                             file = paste0('data/', .y, '_functional_annotation.xlsx'),
+                             file = paste0('shiny_app/data/', .y, '_functional_annotation.xlsx'),
                              firstRow = TRUE,
                              firstCol = TRUE))
-df = read_rds('data/get_nondownsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+df = read_rds('shiny_app/data/get_nondownsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
   toVisNetworkData() %>% .$edges %>% as_tibble() 
 df %>% 
   rename('Source Node' = from, 'Target Node' = to) %>%
-  write_csv('data/JCVI_network_edge_data.csv.gz')
+  write_csv('shiny_app/data/JCVI_network_edge_data.csv.gz')
 functional_annotation %>% 
   semi_join(tibble(gene_id = c(df$from, df$to) %>% unique())) %>%
-  write_csv('data/JCVI_network_node_data.csv.gz')
-df = read_rds('data/get_nondownsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
+  write_csv('shiny_app/data/JCVI_network_node_data.csv.gz')
+df = read_rds('shiny_app/data/get_nondownsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
   toVisNetworkData() %>% .$edges %>% as_tibble() 
 df %>% 
   rename('Source Node' = from, 'Target Node' = to) %>%
-  write_csv('data/chrom_level_network_edge_data.csv.gz')
+  write_csv('shiny_app/data/chrom_level_network_edge_data.csv.gz')
 functional_annotation %>% 
   semi_join(tibble(gene_id = c(df$from, df$to) %>% unique())) %>%
-  write_csv('data/chrom_level_network_node_data.csv.gz')
+  write_csv('shiny_app/data/chrom_level_network_node_data.csv.gz')
 c('output/star/jcvi_counts.csv', 'output/star_chrom_level/chrom_level_counts.csv') %>%
   set_names(c('JCVI', 'chrom_level')) %>% 
   imap(~here(.x) %>% read_csv() %>%
-        openxlsx::write.xlsx(file = paste0('data/', .y, '_raw_read_counts_entire_dataset.xlsx'),
+        openxlsx::write.xlsx(file = paste0('shiny_app/data/', .y, '_raw_read_counts_entire_dataset.xlsx'),
                              firstRow = TRUE,
                              firstCol = TRUE))

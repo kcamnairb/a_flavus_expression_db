@@ -34,8 +34,8 @@ ui = navbarPage(
                # Added growth medium pickerInput
                pickerInput(inputId = 'growth_mediums_to_include_barplot', 
                            label = 'Choose growth mediums (all included by default)', 
-                           choices = sort(unique(metadata$`growth medium`)), # unique growth mediums from metadata
-                           selected = unique(metadata$`growth medium`), # Select all by default
+                           choices = sort(unique(metadata$growth_medium)), # unique growth mediums from metadata
+                           selected = unique(metadata$growth_medium), # Select all by default
                            options = pickerOptions(
                              actionsBox = TRUE,
                              `selected-text-format`= 'count',
@@ -91,8 +91,8 @@ ui = navbarPage(
                  condition = "input.selection_method == 'growth_medium'",
                  selectInput(inputId = 'growth_media_to_include', 
                              label = 'Choose growth media', 
-                             choices = metadata %>% distinct(`growth medium`) %>% 
-                               filter(!is.na(`growth medium`)) %>% pull(`growth medium`), # Replace with the column name for growth medium
+                             choices = metadata %>% distinct(growth_medium) %>% 
+                               filter(!is.na(growth_medium)) %>% pull(growth_medium), # Replace with the column name for growth medium
                              multiple=TRUE)
                ),
                actionButton("generate_heatmap", "Generate heatmap"),
@@ -163,7 +163,7 @@ ui = navbarPage(
                            selected = 1),
                selectizeInput(inputId = 'category_to_color_pca', 
                               label = 'Category to color samples by', 
-                              choices = c('bioproject', 'strain', 'growth medium'))
+                              choices = c('bioproject', 'strain', 'growth medium'='growth_medium'))
              ),
              mainPanel(
                plotlyOutput('pca'),
@@ -250,7 +250,7 @@ ui = navbarPage(
              )
            ),
            div(
-             style = "padding: 15px; border: 1px solid #ddd; border-radius: 4px;",
+             style = "padding: 15px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px;;",
              h4("Co-expression Downloads"),
              fluidRow(
                column(width = 6,
@@ -261,6 +261,17 @@ ui = navbarPage(
                ),
                column(width = 6,
                       downloadButton('download_all_coexpression_edges', label = 'Download all co-expression edges')
+               )
+             )
+           ),
+           div(
+             style = "padding: 15px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px;",
+             h4("Sample Metadata Download"),
+             fluidRow(
+               column(width = 6
+               ),
+               column(width = 6,
+                      downloadButton('download_all_sample_metadata', label = 'Download all sample metadata')
                )
              )
            )
