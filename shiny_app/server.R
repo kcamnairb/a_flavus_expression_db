@@ -1,7 +1,6 @@
 server = function(input, output, session) {
   rv = reactiveValues()
   ### Barplot ###
-  ### Barplot ###
   dataset_input_barplot = reactive({
     switch(paste(input$normalization_method_barplot, input$dataset_barplot),
            'TPM JCVI' = read_fst('data/A_flavus_jcvi_tpm.fst') %>% as_tibble(),
@@ -20,7 +19,8 @@ server = function(input, output, session) {
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
              sra_run = fct_inorder(sra_run))
-    p = ggplot(data, aes(sra_run, expr_value, fill = bioproject, label = sample_description, key = sra_run)) +
+    p = ggplot(data, aes(sra_run, expr_value, fill = bioproject, label = sample_description,
+                         key = sra_run, label2 = growth_medium)) +
       geom_col() +
       scale_fill_manual(values = colors202) +
       labs(title = gene_of_interest, x = 'Sample', y = input$normalization_method_barplot) +
@@ -501,7 +501,8 @@ server = function(input, output, session) {
       mutate(across(everything(), as.character)) %>%
       pivot_longer(everything(), names_to='category', values_to='value') %>%
       filter(!is.na(value))  
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE), rownames= FALSE)
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, searching = FALSE), 
+  rownames= FALSE)
   
   ### JBrowse ###
   assembly_jcvi = assembly(paste0(jbrowse_resources_base, "jcvi.fa.gz"), bgzip = TRUE)
