@@ -215,6 +215,7 @@ ui = navbarPage(
                   '),
            tags$h5('Co-expression network'),
            tags$p('This tab allows you to see genes that are positively and negatively correlated with your genes of interest using the same dropdown menus as the heatmap tab to select the genes.
+                  When additional samples are added to the database the co-expression network changes, so previous versions are made available in the network version dropdown menu.
                   After the subnetwork containing your genes of interest is displayed you can click on the "Enrichment analysis" button to look for functional
                   terms that are enriched in the subnetwork using a one-sided Fishers exact test. Clicking on individual nodes in the network will show information about the corresponding gene.
                   The edge weights for the subnetwork and functional annotation of the genes can be downloaded by clicking the button on the bottom left.

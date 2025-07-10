@@ -1,6 +1,7 @@
 server = function(input, output, session) {
   rv = reactiveValues()
-  ### Barplot ###
+  
+  
   ### Barplot ###
   dataset_input_barplot = reactive({
     switch(paste(input$normalization_method_barplot, input$dataset_barplot),
@@ -20,7 +21,8 @@ server = function(input, output, session) {
       arrange(bioproject, sra_run) %>%
       mutate(bioproject = fct_inorder(bioproject),
              sra_run = fct_inorder(sra_run))
-    p = ggplot(data, aes(sra_run, expr_value, fill = bioproject, label = sample_description, key = sra_run)) +
+    p = ggplot(data, aes(sra_run, expr_value, fill = bioproject, label = sample_description,
+                         key = sra_run, label2 = growth_medium)) +
       geom_col() +
       scale_fill_manual(values = colors202) +
       labs(title = gene_of_interest, x = 'Sample', y = input$normalization_method_barplot) +
@@ -258,8 +260,8 @@ server = function(input, output, session) {
 
  
   ### Co-expression network ###
-  add_network_annotation = function(network){
-    vertex_attr(network) = functional_annotation %>%
+  add_network_annotation = function(network, func_annotation){
+    vertex_attr(network) = func_annotation %>%
       filter(gene_id %in% V(network)$name) %>%
       mutate(gene_id = factor(gene_id, levels=V(network)$name)) %>%
       arrange(gene_id) %>% 
@@ -269,11 +271,12 @@ server = function(input, output, session) {
     return(network)
   }
   network = reactive({
+    data_dir = ifelse(input$network_version == 'v1', 'data_v1', 'data')
     switch(input$dataset_network,
-           'JCVI' = read_rds('data/get_nondownsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
-             add_network_annotation(),
-           'chrom_level' = read_rds('data/get_nondownsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds') %>%
-             add_network_annotation()
+           'JCVI' = read_rds(file.path(data_dir, 'get_nondownsampled_data-no_correction-upper_quartile_normalize-no_scaling-pearson.rds')) %>%
+             add_network_annotation(functional_annotation),
+           'chrom_level' = read_rds(file.path(data_dir, 'get_nondownsampled_data_chrom_level-no_correction-upper_quartile_normalize-no_scaling-pearson.rds')) %>%
+             add_network_annotation(functional_annotation)
            )
   })
   create_network = function(gene_ids, network){
@@ -423,12 +426,14 @@ server = function(input, output, session) {
   observeEvent(input$perform_enrichment,{
     output$enrichment_table = DT::renderDT({
       validate(need(!is.null(input$gene_categories_network), message = FALSE))
+      data_dir = ifelse(input$network_version == 'v1', 'data_v1', 'data')
+      network_genes_v = read_fst(file.path(data_dir, 'gene_in_networks.fst'))
       enrich_res = enrichment_test(gene_list = list('network' = rv$displayed_nodes),
                                    columns_list = c('Gene Ontology', 'KEGG pathways', 'biosynthetic gene clusters', 
                                                     'Subcellular localization', 'Interpro domains'),
                                    functional_annotation %>% 
                                      filter(genome == input$dataset_network) %>%
-                                     semi_join(network_genes, by='gene_id')) %>% 
+                                     semi_join(network_genes_v, by='gene_id')) %>% 
         mutate(padjust = p.adjust(pval, method = 'fdr')) %>%
         filter(padjust < 0.05) %>% 
         select(-pval, -gene_list_name) %>%
@@ -501,7 +506,8 @@ server = function(input, output, session) {
       mutate(across(everything(), as.character)) %>%
       pivot_longer(everything(), names_to='category', values_to='value') %>%
       filter(!is.na(value))  
-  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE), rownames= FALSE)
+  }, escape = FALSE, options = list(paginate=FALSE, info = FALSE, sort=FALSE, searching = FALSE), 
+  rownames= FALSE)
   
   ### JBrowse ###
   assembly_jcvi = assembly(paste0(jbrowse_resources_base, "jcvi.fa.gz"), bgzip = TRUE)
